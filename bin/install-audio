@@ -1,0 +1,55 @@
+#!/bin/bash
+# Audio Synths Vst and Ardour
+packages=(
+    ardour
+    carla
+    aj-snapshot
+    avldrums.lv2
+    calf
+    caps
+    distrho-ports
+    dpf-plugins
+    dragonfly-reverb
+    drumkv1
+    eq10q
+    geonkick-lv2
+    guitarix
+    gxplugins.lv2
+    pipewire-jack
+    jack_capture
+    lsp-plugins-lv2
+    mda-lv2-git
+    ninjas2
+    noise-repellent
+    padthv1
+    realtime-privileges
+    samplv1
+    surge-complete
+    swh-plugins.lv2
+    synthv1
+    tap-plugins
+    wolf-shaper-lv2
+    x42-plugins
+    zam-plugins-lv2
+    zynaddsubfx
+    tal-noisemaker-vst3-bin
+    odin2-synthesizer-lv2
+    monique-monosynth-git
+    cardinal-lv2
+    socalabs-wavetable-lv2-bin
+    delay-architect-git
+    aether.lv2
+    chowbyod-bin
+    sfizz
+    sunvox
+    yabridge
+    yabridgectl
+)
+for package in "${packages[@]}"; do
+    if ! yay -Q $package > /dev/null 2>&1; then
+        echo "Installing $package..."
+        yes "" | yay -S --needed $package
+    else
+        echo "$package is already installed."
+    fi
+done

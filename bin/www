@@ -1,0 +1,25 @@
+#!/bin/zsh -i
+# Http Python Server
+need python
+need xclip
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then 
+ echo -e "Usage: $0 [file/path]"
+ exit
+fi
+[[ ! -d $HOME/.local/www ]] && mkdir -p $HOME/.local/www
+vpn=$(ip a | grep -A 2 "tun0:" | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+if [[ ! -z "$1" ]]; then
+  name=$(basename "$1" &>/dev/null)
+  [[ -f "$HOME/.local/www/$name.tar.gz" ]] && rm "$HOME/.local/www/$name.tar.gz"
+  tar czf "$name.tar.gz" "$1"
+  mv "$name.tar.gz" $HOME/.local/www
+  echo -e "vpn from others -> curl -s http://$vpn:8000/$name.tar.gz\npublic from others -> curl -s http://$(curl -s ifconfig.co):8000/$name.tar.gz -o $name.tar.gz && tar xzf $name.tar.gz && rm $name.tar.gz\nfrom this -> curl -s http://127.0.0.1:8000/$name.tar.gz -o $name.tar.gz && tar xzf $name.tar.gz && rm $name.tar.gz"
+else
+  file=$(zsh -ci "\ls \"$HOME\"/.local/www | fzf-splitted --prompt \"Select a file: \"")
+  lsip
+fi
+cd $HOME/.local/www
+lspwd
+echo -e "Copied -> curl -s http://$vpn:8000/$file"
+echo -en "curl -s http://$vpn:8000/$file" | xclip -sel clip
+python -m http.server

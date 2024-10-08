@@ -1,0 +1,7 @@
+#!/bin/zsh -i
+# Exploit finder
+if [[ ! -f /usr/local/bin/searchsploit ]]; then
+  sudo git clone https://gitlab.com/exploit-database/exploitdb.git /opt/exploitdb
+  sudo ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit
+fi
+/usr/local/bin/searchsploit $@

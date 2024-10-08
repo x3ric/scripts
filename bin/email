@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+# Simple Email Sender
+import argparse
+import smtplib
+import signal
+import sys
+def usage():
+    print('Usage: ./emailsend.py -s <sender> -p <password> -r <receiver> [-c <content>] [-S <server>]')
+    print('  -c, --content   Email content (default: "This is a test email")')
+    print('  -S, --server    SMTP server (default: "smtp.gmail.com:587")')
+def signal_handler(sig, frame):
+    print('\nCtrl+C detected. Stopping...')
+    server.quit()
+    sys.exit(0)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Simple Email Sender')
+    parser.add_argument('-s', '--sender', required=True, help='Sender email address')
+    parser.add_argument('-p', '--password', required=True, help='Sender email password')
+    parser.add_argument('-r', '--receiver', required=True, help='Receiver email address')
+    parser.add_argument('-c', '--content', default='This is a test email', help='Email content')
+    parser.add_argument('-S', '--server', default='smtp.gmail.com:587', help='SMTP server (default: smtp.gmail.com:587)')
+    args = parser.parse_args()
+    signal.signal(signal.SIGINT, signal_handler)
+    try:
+        srv, srvport = args.server.split(':')
+        server = smtplib.SMTP(srv, int(srvport))
+        server.starttls()
+        server.login(args.sender, args.password)
+        server.sendmail(args.sender, args.receiver, args.content)
+        print('Email sent')
+    except Exception as e:
+        print(f'Failed to send email: {e}')
+    finally:
+        server.quit()

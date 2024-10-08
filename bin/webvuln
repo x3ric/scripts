@@ -1,0 +1,4 @@
+#!/bin/bash
+# Webpage vulnerability scanner
+need nikto
+nikto -h "$1"

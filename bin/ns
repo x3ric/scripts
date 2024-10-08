@@ -1,0 +1,114 @@
+#!/bin/env python3
+# NetScanner
+import argparse
+import ipaddress
+import asyncio
+import signal
+import os
+import sys
+import subprocess
+import concurrent.futures
+import resource
+
+def check_pacman():
+    try:
+        subprocess.check_call(['which', 'pacman'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+def check_and_install_aiohttp():
+    try:
+        import aiohttp
+    except ImportError:
+        print("aiohttp is not installed.")
+
+        if check_pacman():
+            print("Installing aiohttp with pacman...")
+            try:
+                subprocess.check_call(['sudo', 'pacman', '-S', 'python-aiohttp'], stderr=subprocess.STDOUT)
+                print("aiohttp has been installed.")
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to install aiohttp: {e}")
+                sys.exit(1)
+        else:
+            print("Pacman not found. Please install aiohttp using your package manager (e.g., apt, yum, dnf).")
+
+async def resolve_host(hostname):
+    try:
+        return await asyncio.get_event_loop().getaddrinfo(hostname, None)
+    except Exception as e:
+        print(f"Failed to resolve hostname: {hostname}")
+        return []
+async def get_protocol(port):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://raw.githubusercontent.com/opc40772/pfsense-graylog/master/service-names-port-numbers/service-names-port-numbers.csv") as response:
+                lines = (await response.text()).split("\n")
+                for line in lines:
+                    if line.startswith(f"\"{port}\","):
+                        fields = line.split(",")
+                        return fields[1].strip('"')
+        return None
+    except Exception as e:
+        print(f"Error fetching protocol information: {e}")
+        return "Unknown"
+async def scan_port(hostname, port, verbose):
+    try:
+        reader, writer = await asyncio.open_connection(hostname, port)
+        service_name = await get_protocol(port)
+        print(f"{port}/tcp".ljust(8), f"open".ljust(7), service_name)
+        writer.close()
+    except (ConnectionRefusedError, asyncio.TimeoutError):
+        if verbose:
+            service_name = await get_protocol(port)
+            print(f"{port}/tcp".ljust(8), f"closed".ljust(7), service_name)
+    except OSError as e:
+        print(f"Error scanning port {port} on {hostname}: {e}")
+async def scan_ports(hostname, ports, verbose):
+    print(f"Scanning host: {hostname}")
+    print(f"Port".ljust(7), "State".ljust(7), "Service")
+    await asyncio.gather(*[scan_port(hostname, port, verbose) for port in ports])
+async def scan_subnet(subnet, port_range, threads, verbose):
+    print(f"Scanning subnet: {subnet} with {threads} threads")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        tasks = [scan_ports(str(ip), port_range, verbose) for ip in ipaddress.IPv4Network(subnet)]
+        await asyncio.gather(*tasks)
+def signal_handler(sig, frame):
+    print('\nCtrl+C detected. Stopping...')
+    os._exit(0)
+async def main():
+    parser = argparse.ArgumentParser(description="NetScanner", formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("target", nargs="?", help="Target hostname/IP, domain, or subnet (e.g., example.com, 192.168.1.0/24)")
+    parser.add_argument("port", nargs="?", help="Port number or range (e.g., 80 or 1-100)")
+    parser.add_argument("--threads", type=int, default=250, help="Number of threads (default: 250)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose mode")
+    args = parser.parse_args()
+    if not args.target:
+        parser.print_help()
+        exit()
+    target = args.target
+    port_arg = args.port
+    threads = args.threads
+    verbose = args.verbose
+    if port_arg:
+        if port_arg == "max":
+            port_range = range(1, 65537)
+        elif "-" in port_arg:
+            start_port, end_port = map(int, port_arg.split("-"))
+            port_range = range(start_port, min(end_port + 1, 65537))
+        else:
+            port_range = [int(port_arg)]
+    else:
+        port_range = range(1, 1025)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (8192, 8192))
+    if "/" in target:
+        subnet = target
+        await scan_subnet(subnet, port_range, threads, verbose)
+    else:
+        hostname = target
+        await scan_ports(hostname, port_range, verbose)
+if __name__ == "__main__":
+    check_and_install_aiohttp()
+    signal.signal(signal.SIGINT, signal_handler)
+    asyncio.run(main())

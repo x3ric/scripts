@@ -1,0 +1,22 @@
+#!/bin/bash
+# Bluetooth Keystrokes Sender
+sudo pacman -Sy --noconfirm
+need bluez-tools
+need bluez-utils
+need bluez-deprecated-tools
+need python-setuptools
+need python-pydbus
+need python-dbus
+need git
+need gcc
+need python-pip
+need python-pybluez
+local_dir="$HOME/.local/opt/BlueDucky"
+if [ ! -d "$local_dir" ]; then
+    echo "Cloning BlueDucky repository into $local_dir..."
+    mkdir -p "$local_dir"
+    git clone https://github.com/pentestfunctions/BlueDucky.git "$local_dir"
+fi
+cd "$local_dir"
+sudo hciconfig hci0 up
+python3 BlueDucky.py

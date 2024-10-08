@@ -1,0 +1,7 @@
+#!/bin/zsh -i
+# Shows Daily Updated Ovpn Files
+ip=$(curl -s https://raw.githubusercontent.com/mmpx12/proxy-list/master/vpn.md | awk -F ':' '{print $2 " -> " $1}' | fzf-splitted | awk -F ' -> ' '{print $2}' | sed 's/\./_/g')
+[[ -z $ip ]] && echo "ip not getted." && exit 1
+curl -s "https://raw.githubusercontent.com/mmpx12/proxy-list/master/vpn/$ip.ovpn" -o "/tmp/$ip.ovpn"
+sudo openvpn "/tmp/$ip.ovpn"
+rm -rf "/tmp/$ip.ovpn"

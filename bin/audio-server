@@ -1,0 +1,14 @@
+#!/bin/bash
+# send audio to external
+port="9696"
+is_module_loaded() {
+  pactl list modules | grep -q "module-native-protocol-tcp" &>/dev/null
+}
+if is_module_loaded; then
+    pactl unload-module module-native-protocol-tcp &>/dev/null
+    echo "PulseAudio module for TCP unloaded"
+else
+    pactl load-module module-native-protocol-tcp port="$port" listen=0.0.0.0 auth-anonymous=true
+    echo "PulseAudio module for TCP loaded"
+    echo -e "On Client -> pactl load-module module-tunnel-sink server=tcp:$(curl -s ifconfig.co):$port"
+fi

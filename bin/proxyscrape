@@ -1,0 +1,350 @@
+#!/bin/bash
+# Proxy letcher and tester
+proxytest() { # Proxy tester
+    local ip=$(echo "$1" | rev | cut -d':' -f2 | rev | sed 's|//||')
+    local port=$(echo "$1" | cut -d':' -f3)
+    if [[ $1 == *"socks5"* ]]; then
+        local type="socks5"
+    elif [[ $1 == *"socks4"* ]]; then
+        local type="socks4"
+    else
+        local type="http"
+    fi
+    local info=$(curl --connect-timeout 5 -x "$1" -s -w '\n%{speed_download}' "https://ipinfo.io")
+    if [[ ! -z $info ]]; then
+        local speed=$(echo "$info" | sed -n '13p' )
+        local country=$(echo "$info" | grep -o '"country": *"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"')
+        if [[ ! -z $country ]]; then
+            case $country in
+                "AF") country+="🇦🇫";;
+                "AX") country+="🇦🇽";;
+                "AL") country+="🇦🇱";;
+                "DZ") country+="🇩🇿";;
+                "AS") country+="🇦🇸";;
+                "AD") country+="🇦🇩";;
+                "AO") country+="🇦🇴";;
+                "AI") country+="🇦🇮";;
+                "AQ") country+="🇦🇶";;
+                "AG") country+="🇦🇬";;
+                "AR") country+="🇦🇷";;
+                "AM") country+="🇦🇲";;
+                "AW") country+="🇦🇼";;
+                "AU") country+="🇦🇺";;
+                "AT") country+="🇦🇹";;
+                "AZ") country+="🇦🇿";;
+                "BS") country+="🇧🇸";;
+                "BH") country+="🇧🇭";;
+                "BD") country+="🇧🇩";;
+                "BB") country+="🇧🇧";;
+                "BY") country+="🇧🇾";;
+                "BE") country+="🇧🇪";;
+                "BZ") country+="🇧🇿";;
+                "BJ") country+="🇧🇯";;
+                "BM") country+="🇧🇲";;
+                "BT") country+="🇧🇹";;
+                "BO") country+="🇧🇴";;
+                "BA") country+="🇧🇦";;
+                "BW") country+="🇧🇼";;
+                "BV") country+="🇧🇻";;
+                "BR") country+="🇧🇷";;
+                "IO") country+="🇮🇴";;
+                "BN") country+="🇧🇳";;
+                "BG") country+="🇧🇬";;
+                "BF") country+="🇧🇫";;
+                "BI") country+="🇧🇮";;
+                "KH") country+="🇰🇭";;
+                "CM") country+="🇨🇲";;
+                "CA") country+="🇨🇦";;
+                "CV") country+="🇨🇻";;
+                "KY") country+="🇰🇾";;
+                "CF") country+="🇨🇫";;
+                "TD") country+="🇹🇩";;
+                "CL") country+="🇨🇱";;
+                "CN") country+="🇨🇳";;
+                "CX") country+="🇨🇽";;
+                "CC") country+="🇨🇨";;
+                "CO") country+="🇨🇴";;
+                "KM") country+="🇰🇲";;
+                "CG") country+="🇨🇬";;
+                "CD") country+="🇨🇩";;
+                "CK") country+="🇨🇰";;
+                "CR") country+="🇨🇷";;
+                "CI") country+="🇨🇮";;
+                "HR") country+="🇭🇷";;
+                "CU") country+="🇨🇺";;
+                "CY") country+="🇨🇾";;
+                "CZ") country+="🇨🇿";;
+                "DK") country+="🇩🇰";;
+                "DJ") country+="🇩🇯";;
+                "DM") country+="🇩🇲";;
+                "DO") country+="🇩🇴";;
+                "EC") country+="🇪🇨";;
+                "EG") country+="🇪🇬";;
+                "SV") country+="🇸🇻";;
+                "GQ") country+="🇬🇶";;
+                "ER") country+="🇪🇷";;
+                "EE") country+="🇪🇪";;
+                "ET") country+="🇪🇹";;
+                "FK") country+="🇫🇰";;
+                "FO") country+="🇫🇴";;
+                "FJ") country+="🇫🇯";;
+                "FI") country+="🇫🇮";;
+                "FR") country+="🇫🇷";;
+                "GF") country+="🇬🇫";;
+                "PF") country+="🇵🇫";;
+                "TF") country+="🇹🇫";;
+                "GA") country+="🇬🇦";;
+                "GM") country+="🇬🇲";;
+                "GE") country+="🇬🇪";;
+                "DE") country+="🇩🇪";;
+                "GH") country+="🇬🇭";;
+                "GI") country+="🇬🇮";;
+                "GR") country+="🇬🇷";;
+                "GL") country+="🇬🇱";;
+                "GD") country+="🇬🇩";;
+                "GP") country+="🇬🇵";;
+                "GU") country+="🇬🇺";;
+                "GT") country+="🇬🇹";;
+                "GG") country+="🇬🇬";;
+                "GN") country+="🇬🇳";;
+                "GW") country+="🇬🇼";;
+                "GY") country+="🇬🇾";;
+                "HT") country+="🇭🇹";;
+                "HM") country+="🇭🇲";;
+                "VA") country+="🇻🇦";;
+                "HN") country+="🇭🇳";;
+                "HK") country+="🇭🇰";;
+                "HU") country+="🇭🇺";;
+                "IS") country+="🇮🇸";;
+                "IN") country+="🇮🇳";;
+                "ID") country+="🇮🇩";;
+                "IR") country+="🇮🇷";;
+                "IQ") country+="🇮🇶";;
+                "IE") country+="🇮🇪";;
+                "IM") country+="🇮🇲";;
+                "IL") country+="🇮🇱";;
+                "IT") country+="🇮🇹";;
+                "JM") country+="🇯🇲";;
+                "JP") country+="🇯🇵";;
+                "JE") country+="🇯🇪";;
+                "JO") country+="🇯🇴";;
+                "KZ") country+="🇰🇿";;
+                "KE") country+="🇰🇪";;
+                "KI") country+="🇰🇮";;
+                "KP") country+="🇰🇵";;
+                "KR") country+="🇰🇷";;
+                "KW") country+="🇰🇼";;
+                "KG") country+="🇰🇬";;
+                "LA") country+="🇱🇦";;
+                "LV") country+="🇱🇻";;
+                "LB") country+="🇱🇧";;
+                "LS") country+="🇱🇸";;
+                "LR") country+="🇱🇷";;
+                "LY") country+="🇱🇾";;
+                "LI") country+="🇱🇮";;
+                "LT") country+="🇱🇹";;
+                "LU") country+="🇱🇺";;
+                "MO") country+="🇲🇴";;
+                "MK") country+="🇲🇰";;
+                "MG") country+="🇲🇬";;
+                "MW") country+="🇲🇼";;
+                "MY") country+="🇲🇾";;
+                "MV") country+="🇲🇻";;
+                "ML") country+="🇲🇱";;
+                "MT") country+="🇲🇹";;
+                "MH") country+="🇲🇭";;
+                "MQ") country+="🇲🇶";;
+                "MR") country+="🇲🇷";;
+                "MU") country+="🇲🇺";;
+                "YT") country+="🇾🇹";;
+                "MX") country+="🇲🇽";;
+                "FM") country+="🇫🇲";;
+                "MD") country+="🇲🇩";;
+                "MC") country+="🇲🇨";;
+                "MN") country+="🇲🇳";;
+                "ME") country+="🇲🇪";;
+                "MS") country+="🇲🇸";;
+                "MA") country+="🇲🇦";;
+                "MZ") country+="🇲🇿";;
+                "MM") country+="🇲🇲";;
+                "NA") country+="🇳🇦";;
+                "NR") country+="🇳🇷";;
+                "NP") country+="🇳🇵";;
+                "NL") country+="🇳🇱";;
+                "NC") country+="🇳🇨";;
+                "NZ") country+="🇳🇿";;
+                "NI") country+="🇳🇮";;
+                "NE") country+="🇳🇪";;
+                "NG") country+="🇳🇬";;
+                "NU") country+="🇳🇺";;
+                "NF") country+="🇳🇫";;
+                "MP") country+="🇲🇵";;
+                "NO") country+="🇳🇴";;
+                "OM") country+="🇴🇲";;
+                "PK") country+="🇵🇰";;
+                "PW") country+="🇵🇼";;
+                "PS") country+="🇵🇸";;
+                "PA") country+="🇵🇦";;
+                "PG") country+="🇵🇬";;
+                "PY") country+="🇵🇾";;
+                "PE") country+="🇵🇪";;
+                "PH") country+="🇵🇭";;
+                "PN") country+="🇵🇳";;
+                "PL") country+="🇵🇱";;
+                "PT") country+="🇵🇹";;
+                "PR") country+="🇵🇷";;
+                "QA") country+="🇶🇦";;
+                "RE") country+="🇷🇪";;
+                "RO") country+="🇷🇴";;
+                "RU") country+="🇷🇺";;
+                "RW") country+="🇷🇼";;
+                "BL") country+="🇧🇱";;
+                "SH") country+="🇸🇭";;
+                "KN") country+="🇰🇳";;
+                "LC") country+="🇱🇨";;
+                "MF") country+="🇲🇫";;
+                "PM") country+="🇵🇲";;
+                "VC") country+="🇻🇨";;
+                "WS") country+="🇼🇸";;
+                "SM") country+="🇸🇲";;
+                "ST") country+="🇸🇹";;
+                "SA") country+="🇸🇦";;
+                "SN") country+="🇸🇳";;
+                "RS") country+="🇷🇸";;
+                "SC") country+="🇸🇽";;
+                "SK") country+="🇸🇰";;
+                "SI") country+="🇸🇮";;
+                "SB") country+="🇸🇧";;
+                "SO") country+="🇸🇴";;
+                "ZA") country+="🇿🇦";;
+                "GS") country+="🇬🇸";;
+                "SS") country+="🇸🇸";;
+                "ES") country+="🇪🇸";;
+                "LK") country+="🇱🇰";;
+                "SD") country+="🇸🇩";;
+                "SR") country+="🇸🇷";;
+                "SJ") country+="🇸🇯";;
+                "SZ") country+="🇸🇿";;
+                "SE") country+="🇸🇪";;
+                "CH") country+="🇨🇭";;
+                "SY") country+="🇸🇾";;
+                "TW") country+="🇹🇼";;
+                "TJ") country+="🇹🇯";;
+                "TZ") country+="🇹🇿";;
+                "TH") country+="🇹🇭";;
+                "TL") country+="🇹🇱";;
+                "TG") country+="🇹🇬";;
+                "TK") country+="🇹🇰";;
+                "TO") country+="🇹🇴";;
+                "TT") country+="🇹🇹";;
+                "TN") country+="🇹🇳";;
+                "TR") country+="🇹🇷";;
+                "TM") country+="🇹🇲";;
+                "TC") country+="🇹🇨";;
+                "TV") country+="🇹🇻";;
+                "UG") country+="🇺🇬";;
+                "UA") country+="🇺🇦";;
+                "AE") country+="🇦🇪";;
+                "GB") country+="🇬🇧";;
+                "US") country+="🇺🇸";;
+                "UM") country+="🇺🇲";;
+                "UY") country+="🇺🇾";;
+                "UZ") country+="🇺🇿";;
+                "VU") country+="🇻🇺";;
+                "VE") country+="🇻🇪";;
+                "VN") country+="🇻🇳";;
+                "VG") country+="🇻🇬";;
+                "VI") country+="🇻🇮";;
+                "WF") country+="🇼🇫";;
+                "EH") country+="🇪🇭";;
+                "YE") country+="🇾🇪";;
+                "XK") country+="🇽🇰";;
+                "ZM") country+="🇿🇲";;
+                "ZW") country+="🇿🇼";;
+                *) country+="🌐";;
+            esac
+        fi
+        local realip=$(echo "$info" | grep -o '"ip": *"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"')
+        local results="$HOME/.cache/$type.txt"
+        [[ ! -f $results ]] && touch $results
+        [[ ! -f "$HOME/.cache/proxylist.txt" ]] && touch "$HOME/.cache/proxylist.txt"
+        if ! grep -qF "$ip:$port" "$results" && [[ ! -z $country ]]; then
+            echo "$ip:$port" >> "$HOME/.cache/proxylist.txt"
+            echo "$ip:$port" >> "$results"
+            if [ -z "$speed" ]; then
+                speed="<50"
+            fi
+            counter=$(< "/tmp/proxy-counter.txt")
+            while [ "$counter" == "" ]; do
+                sleep 1
+            done
+            local hided=""
+            if [[ $realip != $ip ]]; then
+                hided="Hided"
+            fi
+            echo -e "$(printf '\033[1;38m%-5s\033[0m' "$counter")/$(printf '\033[1;38m%-5s\033[0m' "$proxies") $(printf '\033[1;34m%-21s\033[0m' "$ip:$port") $(printf '\033[1;32m%-8s\033[0m' "$country") $(printf '\033[1;31m%-10s\033[0m' "Speed[$speed]") \033[1;36mSaved in $results\033[0m \033[1;37mFinded $(wc --lines < $HOME/.cache/proxylist.txt | awk '{print $1}')\033[0m $(printf '\033[1;38m%-10s\033[0m' "$hided")"
+            return 0
+        fi
+    else
+        return 1
+    fi
+}
+urls=(
+    ### Http Https
+    "https://api.proxyscrape.com/v3/free-proxy-list/get?request=getproxies&protocol=http&proxy_format=ipport&format=text&timeout=20000"
+    "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
+    "https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt"
+    "https://raw.githubusercontent.com/mmpx12/proxy-list/master/https.txt"
+    "https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt"
+    ### Socks 4
+    "https://api.proxyscrape.com/v3/free-proxy-list/get?request=getproxies&protocol=socks4&proxy_format=ipport&format=text&timeout=20000"
+    "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks4.txt"
+    "https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/socks4.txt"
+    "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks4.txt"
+    ### Socks 5
+    "https://api.proxyscrape.com/v3/free-proxy-list/get?request=getproxies&protocol=socks5&proxy_format=ipport&format=text&timeout=20000"
+    "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"
+    "https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/socks5.txt"
+    "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+    "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt"
+)
+
+rm -f /tmp/proxies 2> /dev/null
+filefetch() {
+    if [[ "$1" == *"socks5"* ]]; then
+        prefixlist="socks5://"
+    elif [[ "$1" == *"socks4"* ]]; then
+        prefixlist="socks4://"
+    else
+        prefixlist="http://"
+    fi
+    cat "$1" | while IFS= read -r line; do echo "$prefixlist$line"; done >> /tmp/proxies
+}
+[[ -f "$HOME/.cache/socks4.txt" ]] && filefetch "$HOME/.cache/socks4.txt" && cat "$HOME/.cache/socks4.txt" >> /tmp/proxies
+[[ -f "$HOME/.cache/socks5.txt" ]] && filefetch "$HOME/.cache/socks5.txt" && cat "$HOME/.cache/socks5.txt" >> /tmp/proxies
+[[ -f "$HOME/.cache/http.txt" ]] && filefetch "$HOME/.cache/http.txt" && cat "$HOME/.cache/http.txt" >> /tmp/proxies
+rm -f "$HOME/.cache/socks4.txt" 2> /dev/null
+rm -f "$HOME/.cache/socks5.txt" 2> /dev/null
+rm -f "$HOME/.cache/http.txt" 2> /dev/null
+rm -f "$HOME/.cache/proxylist.txt" 2> /dev/null
+urlfetch() {
+    if [[ $1 == *"socks5"* ]]; then
+        prefix="socks5://"
+    elif [[ $1 == *"socks4"* ]]; then
+        prefix="socks4://"
+    else
+        prefix="http://"
+    fi
+    curl -s "$1" | while IFS= read -r line; do echo "$prefix$line"; done >> /tmp/proxies
+}
+for url in "${urls[@]}"; do
+    urlfetch "$url"
+done
+proxies=$(wc --lines < /tmp/proxies | awk '{print $1}')
+counter=0
+rm -f /tmp/proxy-counter.txt
+tac /tmp/proxies | awk '!seen[$0]++' | tac > /tmp/proxies_clean && mv /tmp/proxies_clean /tmp/proxies # clean repeated ip:port from bottom
+while IFS= read -r line; do
+    ((counter++)) && echo "$counter" > /tmp/proxy-counter.txt
+    proxytest "${line}" &
+done < /tmp/proxies

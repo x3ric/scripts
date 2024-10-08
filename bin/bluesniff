@@ -1,0 +1,49 @@
+#!/bin/zsh -i
+# Bluetooth Sniffer
+
+need spooftooph
+
+results_file="/tmp/bluetooth_scan_results.txt"
+
+spoof_device() {
+    [[ ! -s "$results_file" ]] && echo "No devices found. Please run a scan first." && return
+    device_mac=$(awk '{print $2}' "$results_file" | fzf-splitted --prompt="Select a device to spoof: " --height=40%)
+    if [[ -n "$device_mac" ]]; then
+        echo "Enter a new name for the spoofed device (leave blank to keep original name):"
+        read new_name
+        if [[ -n "$new_name" ]]; then
+            spooftooph -i hci0 -a "$device_mac" -n "$new_name" 2>/dev/null && echo "Successfully spoofed $device_mac with new name $new_name."
+        else
+            spooftooph -i hci0 -a "$device_mac" 2>/dev/null && echo "Successfully spoofed $device_mac."
+        fi
+    else
+        echo "No device selected."
+    fi
+}
+
+
+quit() {
+    echo "Exiting..."
+    exit 0
+}
+
+start_bluetoothctl_scan() {
+    rm -f "$results_file" && touch "$results_file"
+    bluetoothctl power on > /dev/null
+    bluetoothctl scan on > /dev/null &
+    echo "Scanning for devices... (this will take 10 seconds)"
+    sleep 10
+    bluetoothctl scan off > /dev/null
+    bluetoothctl devices | tee "$results_file"
+    [[ -s "$results_file" ]] && echo "Scan completed." || echo "No devices found."
+}
+
+while true; do
+    choice=$(echo -e "1. Start bluetoothctl Scan\n2. Spoof a Device\n3. Quit" | fzf-splitted --prompt="Choose an option: " --height=40% --border)
+    case "$choice" in
+        "1. Start bluetoothctl Scan") start_bluetoothctl_scan ;;
+        "2. Spoof a Device") spoof_device ;;
+        "3. Quit") quit ;;
+        *) echo "Invalid option." ;;
+    esac
+done

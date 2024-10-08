@@ -1,0 +1,58 @@
+#!/bin/zsh
+# Chirpy Jekyll Template for HackTheBox
+if [[ $# -ne 5 ]]; then
+  echo "Usage: blog-htb <path> <challenge_name> <difficulty_level> <server_ip> <hostname>"
+  echo "example: blog-htb \"$HOME/Documents/Projects/Hack/CTF/HTB\" \"Soccer\" \"easy\" \"10.10.11.194\" \"soccer.htb\" \"soccer, soccer writeup, soccer ctf\""
+  exit 1
+fi
+dir="$1"
+current_date=$(date +'%Y-%m-%d')
+challenge_name=$1
+challenge_lower_name=$(echo "$challenge_name" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+challenge_level=$2
+server_ip=$3
+hostname=$4
+tags="htb, cft, writeup, linux"
+keywords="htb, capturetheflag, ctf, $challenge_lower_name, hackthebox, writeup"
+file_name="${current_date}-HackTheBox-$(echo "$challenge_name" | tr ' ' '-').md"
+[[ ! -d "$dir" ]] && mkdir -p "$dir" && echo "[+] Directory created: $dir"
+template="Explore the fundamentals of cybersecurity in the **$challenge_name Capture The Flag (CTF)** challenge, a **$challenge_level-level** experience! This straightforward CTF writeup provides insights into key concepts with clarity and simplicity, making it accessible for players at this level.
+
+### Add Hosts
+
+\`\`\`bash
+$server_ip $hostname
+\`\`\`
+
+#### Script to add hosts automatically
+
+\`\`\`bash
+ip=\"$server_ip\"
+domain=\"$hostname\"
+grep -qF \"\$ip \$domain\" /etc/hosts || echo -e \"\$ip \$domain\" | sudo tee -a /etc/hosts
+\`\`\`
+
+### Mapping
+
+\`\`\`bash
+nmap -sCV $hostname
+\`\`\`"
+
+cat <<EOT > "$dir/$file_name"
+---
+title: HackTheBox $challenge_name Writeup
+date: $current_date 09:20:00 +0800
+categories: [ctf]
+tags: [$tags]
+keywords: [$keywords]
+---
+
+$template
+EOT
+if [[ -f "$dir/$file_name" ]]; then
+  echo "[+] File created: $dir/$file_name"
+  code "$dir/$file_name"
+else
+  echo "[-] Failed to create file."
+  exit 1
+fi

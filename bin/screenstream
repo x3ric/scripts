@@ -1,0 +1,21 @@
+#!/bin/bash
+# screen to reach from external
+fps=30
+ip=$(ip -4 addr | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | tail -n +2)
+port=8989
+echo -e "To play from this machine -> ffplay udp://$ip:$port"
+echo -e "To play from other machines -> ffplay udp://$(curl -s ifconfig.co):$port"
+if ! command -v xdpyinfo &> /dev/null; then
+    echo "xdpyinfo could not be found. Please install it."
+    exit 1
+fi
+video_size=$(xdpyinfo | grep 'dimensions:' | awk '{print $2;}')
+if [ -z "$video_size" ]; then
+    echo "Failed to get video size from xdpyinfo."
+    exit 1
+fi
+ffmpeg -y \
+    -video_size "$video_size" \
+    -framerate "$fps" \
+    -f x11grab -i :0.0 \
+    -f mpegts udp://"$ip":"$port"

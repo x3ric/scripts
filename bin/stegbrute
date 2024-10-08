@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+# Steganography bruteforce tool
+import os
+import sys
+import subprocess
+import argparse
+import threading
+import signal
+import time
+def logo():
+   print('''  _________ __               ___.                 __          \n /   _____//  |_  ____   ____\\_ |_________ __ ___/  |_  ____  \n \\_____  \\    __\\/ __ \\ / ___\\| __ \\_  __ \\  |  \\   __\\/ __ \\ \n /        \\|  | \\  ___// /_/  > \\_\\ \\  | \\/  |  /|  | \\  ___/ \n/_______  /|__|  \\___  >___  /|___  /__|  |____/ |__|  \\___  >\n        \\/           \\/_____/     \\/                       \\/ \n''')
+def help_message():
+    print('''Usage: stegbrute [OPTIONS]\n\nOptions:\n  -w, --wordlist FILE         path of the wordlist (required)\n  -f, --file-name FILE        the file name path you want to crack (required)\n  -v, --verbose               shows every try the program does\n  -t, --threads NUM           number of threads to bruteforce the file (default: 3)\n  -h, --help                  display this help and exit''')
+def main():
+    logo()
+    def signal_handler(sig, frame):
+        print('\nCtrl+C detected. Stopping...')
+        os._exit(0)
+    signal.signal(signal.SIGINT, signal_handler)
+    parser = argparse.ArgumentParser(description='Steganography bruteforce tool')
+    parser.add_argument('-w', '--wordlist', required=True, help='path of the wordlist')
+    parser.add_argument('-f', '--file-name', required=True, help='the file name path you want to crack')
+    parser.add_argument('-v', '--verbose', action='store_true', help='shows every try the program does')
+    parser.add_argument('-t', '--threads', type=int, default=3, help='number of threads to bruteforce the file')
+    args = parser.parse_args()
+    if subprocess.run(['which', 'steghide'], stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode != 0:
+        print("\x1b[0;10;41mError:\x1b[0;0;37m 'steghide' is not installed!\x1b[0m", file=sys.stderr)
+        sys.exit(1)
+    if not os.path.isfile(args.wordlist):
+        print("\x1b[0;10;41mError:\x1b[0;0;37m The wordlist '{}' doesn't exist\x1b[0m".format(args.wordlist), file=sys.stderr)
+        sys.exit(1)
+    if not os.path.isfile(args.file_name):
+        print("\x1b[0;10;41mError:\x1b[0;0;37m The file '{}' doesn't exist\x1b[0m".format(args.file_name), file=sys.stderr)
+        sys.exit(1)
+    print("Bruteforcing the file '{}' with the wordlist '{}' using {} threads".format(args.file_name, args.wordlist, args.threads))
+    threads = []
+    for i in range(args.threads):
+        thread = threading.Thread(target=bruteforce, args=(args.wordlist, args.file_name, args.verbose, i, args.threads))
+        threads.append(thread)
+        thread.start()
+    for thread in threads:
+        thread.join()
+def bruteforce(wordlist, file_name, verbose, thread_num, threads):
+    before = time.time()
+    with open(wordlist, 'r', encoding='latin-1') as f:
+        lines = f.readlines()
+    if threads <= 1:
+        lineswl = lines
+    else:
+        lineswl = lines[thread_num::3]
+    for idx, line in enumerate(lineswl):
+        password = line.strip()
+        if run_extract(password, file_name, verbose, thread_num):
+            print("\x1b[1;1mTried passwords : {}\x1b[0m".format(idx-1))
+            print("Successfully cracked in {:.2f}s".format(time.time() - before))
+            os._exit(0)
+    print("(Thread-{}) Failed to crack the file, finished the passwords {:.2f}s".format(thread_num, time.time() - before))
+def run_extract(password, file, verbose, thread_num):
+    cmd = ['steghide', 'extract', '-sf', file, '-p', password, '-f']
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if "wrote extracted data to" in result.stderr.decode('utf-8'):
+        print("\x1b[1;32mPassword: {}\nFile extracted!\x1b[0m".format(password))
+        return True
+    elif verbose:
+        print("Thread-{}: Trying Password {} - Failed".format(thread_num, password))
+    return False
+if __name__ == "__main__":
+    main()

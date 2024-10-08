@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+# GitHub Commits Bot
+import os
+import random
+from datetime import datetime, timedelta
+import numpy as np
+
+START_DATE = datetime(2021, 1, 1)
+END_DATE = datetime(2024, 7, 3)
+
+def generate_commits(current_date):
+    def sigmoid(x):
+        return 1 / (1 + np.exp(-0.001 * (x - 1000)))
+    weekday = current_date.weekday()
+    days_since_start = (current_date - START_DATE).days
+    base_probability = sigmoid(days_since_start)
+    if weekday < 5:  # Weekdays (Monday to Friday)
+        base_probability *= 1.1
+    else:  # Weekends (Saturday and Sunday)
+        base_probability *= 1.7
+    if days_since_start < 365:
+        num_commits = int(random.uniform(1, 10) * base_probability)
+    elif days_since_start < 2 * 365:
+        num_commits = int(random.uniform(1, 15) * base_probability)
+    else:
+        num_commits = int(random.uniform(1, 17) * base_probability)
+    if random.random() < 0.05:
+        num_commits += random.randint(17, 20)
+    if random.random() < 0.01:
+        num_commits += random.randint(20, 75)
+    return num_commits if num_commits > 0 else 0
+current_date = START_DATE
+total_commits = 0
+while current_date <= END_DATE:
+    num_commits = generate_commits(current_date)
+    total_commits += num_commits
+    if num_commits > 0:
+        for i in range(num_commits):
+            commit_message = f"Commit {i+1}/{num_commits} on {current_date.strftime('%Y-%m-%d')}"
+            with open('commit.md', 'w') as f:
+                f.write(commit_message)
+            os.system(f'git add commit.md')
+            commit_date = current_date.strftime("%Y-%m-%d %H:%M:%S")
+            os.system(f'GIT_COMMITTER_DATE="{commit_date}" GIT_AUTHOR_DATE="{commit_date}" git commit -m "{commit_message}" --date="{commit_date}"')
+            os.remove('commit.md')  # Remove the file after commit
+    else:
+        print(f"No commits for {current_date.strftime('%Y-%m-%d')}")
+    current_date += timedelta(days=1)
+os.system('git add .')
+os.system('git commit -m "Final commit"')
+os.system('git push origin main')
+print(f"Total commits generated: {total_commits}")

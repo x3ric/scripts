@@ -1,0 +1,10 @@
+#!/bin/bash
+# make directory and cd into it
+if [ -z "$1" ]; then
+    echo "Usage: mkcd <directory_name>"
+    return 1
+fi
+if [ ! -d "$1" ]; then
+    mkdir -p "$1" || { echo "Failed to create directory"; return 1; }
+fi
+cd "$(realpath "$1")" || { echo "Failed to change directory"; return 1; }

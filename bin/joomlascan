@@ -1,0 +1,4 @@
+#!/bin/zsh -i
+# Webpage WordList Generator
+need joomscan
+joomscan --url "$1" -ec

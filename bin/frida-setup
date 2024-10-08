@@ -1,0 +1,59 @@
+#!/bin/zsh -i
+# Frida Setup
+need android-apktool-bin
+need apk-tools
+need jq
+local_dir="$HOME/.local/opt/Frida"
+if [ ! -d "$local_dir" ]; then
+    mkdir -p "$local_dir"
+    cd "$local_dir"
+    pyenv
+    pip install frida-tools setuptools objection aapt2
+    echo -e "Add in path --> export PATH="$local_dir/venv/bin:\$PATH""
+else
+    cd "$local_dir"
+    pyenv
+fi
+version=$(curl -s https://api.github.com/repos/frida/frida/releases/latest | jq -r '.tag_name')
+architecture=$(adb shell getprop ro.product.cpu.abi | sed 's/-.*//')
+filename="frida-server-$version-android-$architecture"
+if timeout 5 frida-ps -U &> /dev/null; then
+    if adb  shell '[[ ! -f '/data/local/tmp/$filename' ]]' &> /dev/null; then
+        url="https://github.com/frida/frida/releases/download/$version/$filename.xz"
+        if [ ! -f "./$filename" ]; then
+            wget "$url" -O "$filename.xz"
+            unxz "$filename.xz"
+        fi
+        adb push "$filename" /data/local/tmp/
+        adb shell 'cd /data/local/tmp/ ; chmod 755 '$filename' ; su ; ./'$filename' &'
+    fi
+fi
+if [[ $1 == "recovery" ]]; then
+    adb reboot recovery
+    echo -n "Mount System Partition in TWRP and press Enter. " ; read
+    ## change in /system/build.prop
+        adb shell "sed -i 's/^ro.secure=.*$/ro.secure=0/' /system/build.prop ; sed -i 's/^ro.adb.secure=.*$/ro.adb.secure=0/' /system/build.prop ; sed -i 's/^ro.debuggable=.*$/ro.debuggable=1/' /system/build.prop"
+    ## Burp Sys certificate
+        cert="./cert"
+        url="http://127.0.0.1:8080/$cert"
+        if wget --spider --quiet "$URL"; then
+            wget "$url" -o "$cert"
+            if [ ! -f "$cert" ]; then
+                openssl x509 --inform DER -in "$cert" -out Burp.pem
+                file="$(openssl x509 --in Burp.pem --subject_hash_old | head -n 1).0"
+                if adb  shell '[[ ! -f '/system/etc/security/cacerts/$filename' ]]' &> /dev/null; then
+                    mv Burp.pem "$file"
+                    adb push "$file" /system/etc/security/cacerts
+                    rm -rf "$file"
+                fi
+            fi
+        fi
+    adb reboot
+fi
+local_dir_bin="$local_dir/venv/bin"
+config_file="$HOME/.local/zsh/private"
+if ! grep -q "$local_dir_bin" "$config_file"; then
+  echo "export PATH=\"$local_dir_bin:\$PATH\"" >> "$config_file"
+  echo "Done now simply restart the shell"
+fi
+

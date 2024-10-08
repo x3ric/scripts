@@ -1,0 +1,52 @@
+#!/bin/bash
+# Hash bruteforcer
+need dirbuster-wordlists
+need dirb
+need john
+need python-name-that-hash
+need hashcat
+need rockyou
+gpu_vendor=$(lspci | grep -i -E 'vga|3d' | grep -i -E 'nvidia|amd')
+hip_installed=$(pacman -Qq | grep -E 'hip-runtime-nvidia|hip-runtime-amd')
+if [[ -z "$hip_installed" ]]; then
+    if [[ "$gpu_vendor" == *NVIDIA* || "$gpu_vendor" == *nvidia* ]]; then
+        yay --needed -S hip-runtime-nvidia
+        echo "Detected NVIDIA GPU. HIP runtime for NVIDIA installed successfully."
+    elif [[ "$gpu_vendor" == *AMD* || "$gpu_vendor" == *amd* ]]; then
+        yay --needed -S hip-runtime-amd
+        echo "Detected AMD GPU. HIP runtime for AMD installed successfully."
+    fi
+fi
+list() {
+    list=$(zsh -ci 'find /usr/share/dict/ /usr/share/dirb/wordlists/ -type f -name "*.txt" | fzf-splitted')
+}
+if [[ $1 == 'zip2john' ]];then
+    list
+    zip2john $2 > /tmp/zip_hash.txt
+    john --wordlist="$list" /tmp/zip_hash.txt "$@"
+    [[ -f "$HOME/.john/john.pot" ]] && john --show=left "$HOME/.john/john.pot"
+    rm /tmp/zip_hash.txt
+    exit
+elif [[ $1 == 'ssh2john' ]];then
+    list
+    ssh2john $2 > /tmp/ssh_hash.txt
+    shift 2
+    john --wordlist="$list" /tmp/ssh_hash.txt "$@"
+    [[ -f "$HOME/.john/john.pot" ]] && john --show=left "$HOME/.john/john.pot"
+    rm /tmp/ssh_hash.txt
+    exit
+elif [[ $1 == 'john' ]]; then
+    list
+    echo "$2" > /tmp/hash.txt
+    shift 2
+    format=$(zsh -ci 'nth -f /tmp/hash.txt --no-banner -a -g | jq -r ".[][] | select(.name and .description and .john) | \"\(.john) - \(.name) - \(.description)\" " | fzf-splitted | awk "{print \$1}"')
+    john --wordlist="$list" --format="$format" "/tmp/hash.txt" "$@"
+    [[ -f "$HOME/.john/john.pot" ]] && john --show=left --format="$format" "$HOME/.john/john.pot"
+else
+    list
+    echo "$1" > /tmp/hash.txt
+    shift 1
+    type=$(zsh -ci 'nth -f /tmp/hash.txt --no-banner -a -g | jq -r ".[][] | select(.name and .description and .hashcat) | \"\(.hashcat) - \(.name) - \(.description)\" " | fzf-splitted | awk "{print \$1}"')
+    hashcat -m "$type" "/tmp/hash.txt" "$list" "$@"
+    [[ -f "$HOME/.local/share/hashcat/hashcat.potfile" ]] && hashcat -m "$type" --show "/tmp/hash.txt" 
+fi

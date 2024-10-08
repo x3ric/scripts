@@ -1,0 +1,7 @@
+#!/bin/bash
+# Regex in all git commits
+if [ -z "$1" ]; then
+    echo "Usage: git-grep <pattern>"
+    exit 1
+fi
+git log --all -p | grep -E "$1"

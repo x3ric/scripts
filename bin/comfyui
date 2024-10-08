@@ -1,0 +1,53 @@
+#!/bin/bash
+# ComfyUI installer
+clone() {
+    if [[ ! -d "$HOME/.local/opt/comfyui" ]]; then
+        cd "$HOME/.local/opt"
+        git clone https://github.com/comfyanonymous/ComfyUI --recurse-submodules --depth 1
+        mv ./ComfyUI ./comfyui
+        cd "$HOME/.local/opt/comfyui"
+    else
+        cd "$HOME/.local/opt/comfyui"
+        git pull | grep -v 'Already up to date.'
+    fi  
+    if [[ ! -d ./custom_nodes/ComfyUI-Manager ]]; then
+        cd custom_nodes
+        git clone https://github.com/ltdrdata/ComfyUI-Manager
+        git clone https://github.com/jags111/efficiency-nodes-comfyui
+        git clone https://github.com/civitai/civitai_comfy_nodes
+        cd ..
+    else
+        cd custom_nodes
+        git pull | grep -v 'Already up to date.'
+        cd ..
+    fi
+}
+venv() {
+    [[ ! -f ./venv ]] && python -m venv venv && source venv/bin/activate && deps
+}
+deps() {
+    if ! command -v pip &> /dev/null; then
+        python -m ensurepip
+    fi
+    pip show $(sed 's/#.*//' requirements.txt) > /dev/null 2>&1 || {
+        pip install --upgrade pip
+        pip install -r requirements.txt --no-warn-script-location
+    }
+    pip show $(sed 's/#.*//' custom_nodes/ComfyUI-Manager/requirements.txt) > /dev/null 2>&1 || {
+        pip install -r custom_nodes/ComfyUI-Manager/requirements.txt --no-warn-script-location
+    }
+    for pkg in torchvision numba simpleeval scikit-image piexif oe_utils webcolors; do
+        pip show "$pkg" > /dev/null 2>&1 || pip install "$pkg"
+    done
+}
+run() {
+    echo "--cpu -> to run it on cpu"
+    [[ -f ./venv ]] && source venv/bin/activate
+    export ffmpeg_bin_path="$(which /usr/bin/ffmpeg)"
+    python main.py --preview-method auto "$@"
+}
+[[ $1 == "revenv" ]] && sudo rm -rf "$HOME/.local/opt/comfyui/venv" && $0 && exit
+[[ $1 == "reinstall" ]] && sudo rm -rf "$HOME/.local/opt/comfyui" && $0 && exit
+clone
+venv "$@"
+run "$@"

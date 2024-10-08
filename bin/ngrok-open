@@ -1,0 +1,20 @@
+#!/bin/bash
+# Ngrok open ports
+need ngrok
+if [[ ! -f $HOME/.config/ngrok/ngrok.yml ]]; then
+    echo "Login in ngrok -> https://dashboard.ngrok.com/signup"
+    echo "Ngrok token -> ngrok config add-authtoken $personal_ngrok_token"
+elif [[ -z $1 ]]; then
+    echo -e "\$2 = <ip>:<port> or <port>"
+    exit
+elif [[ $1 == "http" ]]; then
+    echo -e "domain -> ngrok.x3ric.com"
+    sleep 3
+    if [[ ! -z $3 ]]; then
+        ngrok http --domain="$3" "$2"
+    else 
+        ngrok http "$2"
+    fi
+else
+    ngrok tcp "$1"
+fi

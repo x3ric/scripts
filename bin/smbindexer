@@ -1,0 +1,4 @@
+#!/bin/bash
+# Smb indexer bruteforcer
+need enum4linux
+enum4linux -a $1

@@ -1,0 +1,5 @@
+#!/bin/zsh -i
+# Vpn Connect Script
+need nm-vpngate-git
+[[ $1 == "-s" || $1 == "--stop" ]] && nmcli connection delete type vpn
+nm-vpngate "$@"

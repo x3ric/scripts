@@ -1,0 +1,24 @@
+#!/bin/bash
+# Minecraft Source Editor
+JAVA_VERSION=21
+need "jdk$JAVA_VERSION-openjdk"
+need gradle
+export JAVA_HOME="/usr/lib/jvm/java-$JAVA_VERSION-openjdk"
+if [[ ! -d "$HOME/.local/opt/minecraft" ]]; then
+    if [[ ! -d "$HOME/.local/opt" ]]; then
+        mkdir -p "$HOME/.local/opt"
+    fi
+    cd $HOME/.local/opt && git clone https://github.com/AdrianSLTW/MCP-Reborn && mv ./MCP-Reborn ./minecraft
+fi
+cd $HOME/.local/Minecraft
+if [[ ! -d $HOME/.local/Minecraft/src ]]; then
+     ./gradlew setup ; echo "src at -> $HOME/.local/minecraft/src"
+fi
+if [[ $1 == "ide" ]]; then
+    need intellij-idea-community-edition
+    idea $HOME/.local/Minecraft
+    exit 0
+fi
+[[ -z $1 ]] && option="runclient" || option=$1
+./gradlew $option
+

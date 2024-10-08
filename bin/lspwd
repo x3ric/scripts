@@ -1,0 +1,3 @@
+#!/bin/bash
+# List Dir Compact
+echo -e "[\e[96m`pwd`\e[0m]\e[34m" && ls && echo -en "\e[0m"

@@ -1,0 +1,17 @@
+#!/bin/bash
+# ollama open-webui
+if ! command -v ollama &>/dev/null; then
+    curl -fsSL https://ollama.com/install.sh | sh
+fi
+need docker
+if lspci | grep -E "NVIDIA|GeForce" &>/dev/null; then
+    need nvidia-container-toolkit
+fi
+sudo systemctl enable --now docker
+if docker ps -a --format '{{.Names}}' | grep -Eq "^open-webui\$"; then
+    docker stop open-webui &>/dev/null
+    docker rm open-webui &>/dev/null
+fi
+docker run -p 8080:8080 --add-host=host.docker.internal:host-gateway -v open-webui:/app/backend/data --name open-webui --restart always -e WEBUI_AUTH="false" ghcr.io/open-webui/open-webui:main
+docker stop open-webui &>/dev/null
+docker rm open-webui &>/dev/null

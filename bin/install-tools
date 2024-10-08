@@ -1,0 +1,75 @@
+#!/bin/bash
+# Install Penterst Tools
+packages=(
+    nmap
+    openvpn
+    croc
+    onionshare
+    arduino-cli
+    arduino-ide
+    binwalk
+    jless
+    htmlq
+    docker
+    gnu-netcat
+    gdb
+    hip-runtime-nvidia
+    hping
+    httpx-bin
+    hydra
+    metasploit
+    entr
+    nano
+    qemu-full
+    sherlock
+    sox
+    sqlmap
+    steam
+    steghide
+    termshark
+    tor
+    tor-browser # blackarch
+    haguichi
+    barrier
+    whatweb
+    python-pwntools
+    checksec
+    ltrace
+    gitleaks
+    parallel
+    radare2
+    r2ghidra
+    iaito
+    android-studio
+    sqlitebrowser
+    jdk17-openjdk
+    jadx
+    quark-engine # blackarch
+    python-plotly
+    typescript
+    pinta
+    jython #for burp extension /opt/jython
+    snyk
+)
+if ! pacman -Qi blackarch-keyring &>/dev/null; then
+    echo "Installing BlackArch Repository..."
+    curl -O https://blackarch.org/strap.sh && {
+    chmod +x strap.sh
+    sudo ./strap.sh && echo "Repository installed."
+    rm strap.sh
+    } || {
+    echo "Failed to install the repository."
+    return 1
+    }
+fi
+for package in "${packages[@]}"; do
+    if ! yay -Q $package > /dev/null 2>&1; then
+        echo "Installing $package..."
+        yes "" | yay -S --needed $package
+    else
+        echo "$package is already installed."
+    fi
+done
+sudo usermod -G realtime -a e
+sudo systemctl enable docker.service
+sudo systemctl start docker.service

@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+# Microsoft AES Decrypter
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+import base64
+
+def main():
+    try:
+        key = b"\x4e\x99\x06\xe8\xfc\xb6\x6c\xc9\xfa\xf4\x93\x10\x62\x0f\xfe\xe8\xf4\x96\xe8\x06\xcc\x05\x79\x90\x20\x9b\x09\xa4\x33\xb6\x6c\x1b"
+        iv = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b64_ciphertext = input("Enter the Base64-encoded ciphertext: ").strip()
+        b64_ciphertext += "=" * (((4 - len(b64_ciphertext) % 4) % 4))
+        print(f"Base64 ciphertext (with padding): {b64_ciphertext}")
+        try:
+            raw_ciphertext = base64.b64decode(b64_ciphertext)
+            print(f"Raw ciphertext (decoded): {raw_ciphertext}")
+        except (base64.binascii.Error, ValueError) as e:
+            print(f"Error decoding Base64: {e}")
+            return
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        try:
+            plaintext_padded = cipher.decrypt(raw_ciphertext)
+            print(f"Plaintext (with padding): {plaintext_padded}")
+            plaintext = unpad(plaintext_padded, AES.block_size)
+            print("Decrypted plaintext:", plaintext.decode())
+        except ValueError as e:
+            print(f"Decryption error: {e}")
+    except KeyboardInterrupt:
+        print("\nProcess interrupted by user. Exiting ...")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,100 @@
+#!/bin/zsh -i
+# Apk Tool
+need uber-apk-signer-bin
+need android-apktool-bin
+need android-sdk-build-tools
+need android-sdk
+need apk-tools
+local_dir="$HOME/.local/opt/Frida"
+if [ ! -d "$local_dir" ]; then
+    mkdir -p "$local_dir"
+    cd "$local_dir"
+    pyenv
+    pip install frida-tools setuptools objection
+else
+    cd "$local_dir"
+    pyenv
+fi
+if [[ -z $1 ]]; then
+    echo -e "Usage: \n d = decompile\n r = recompile\n s = sing\n i = inject"
+elif [[ $1 == "d" ]]; then
+    app=$(adb shell pm list packages | sed 's/package://' | fzf-splitted)
+    path_apk="$HOME/.local/opt/Apk/$app"
+    if [[ ! -f $path_apk ]]; then
+        mkdir -p "$path_apk"
+    fi
+    cd "$path_apk"
+    app_path=$(adb shell pm path $app | head -n 1 | sed 's/package://')
+    adb pull "$app_path"
+    apktool d --only-main-classes base.apk
+    global_dat="$path_apk/base/assets/bin/Data/Managed/Metadata/global-metadata.dat"
+    if [[ -f $global_dat ]]; then
+        app_path_splitted=$(adb shell pm path $app | sed 's/package://' | tail -n 1)
+        adb pull "$app_path_splitted"
+        app_path_splitted_name_ext=$(basename "$app_path_splitted")
+        app_path_splitted_name=$(basename "$app_path_splitted" .apk)
+        unzip "$app_path_splitted_name_ext" -d "$app_path_splitted_name"
+        need il2cpp-dumper-bin
+        mkdir -p Il2Cpp
+        sudo il2cpp-dumper "$(find "$path_apk/$app_path_splitted_name/lib" -name "libil2cpp.so")" "$global_dat" Il2Cpp
+    fi
+else
+    app=$(ls "$HOME/.local/opt/Apk/" | fzf-splitted)
+    path_apk="$HOME/.local/opt/Apk/$app"
+    if [[ ! -f $path_apk ]]; then
+        mkdir -p "$path_apk"
+    fi
+    cd "$path_apk"
+    if [[ $1 == "r" ]]; then
+        apktool b -f --only-main-classes --use-aapt2 base -o modded.apk && {
+        split_apk_pattern=$(\ls *split*.apk)
+            uber-apk-signer -a modded.apk --allowResign --overwrite && {
+                for split_apk in $split_apk_pattern; do
+                    if [ -f "$split_apk" ]; then
+                        uber-apk-signer -a "$split_apk" --allowResign --overwrite
+                    fi
+                done
+                adb shell pm uninstall "$app"
+                adb install-multiple -r -d modded.apk $split_apk_pattern
+            }
+        }
+    elif [[ $1 == "i" ]]; then
+        unset _JAVA_OPTIONS
+        echo -e "\n{\n  "interaction": {\n    "type": "script",\n    "path": "libfrida-gadget.script.so",\n    "on_load": "resume"\n  }\n}\n" > ./cfgobjection.json
+        app=$(\ls "$HOME/.local/opt/Frida/hacks"/*.js 2>/dev/null | grep '.js' | fzf-splitted)
+        objection patchapk -s modded.apk -2 -c ./cfgobjection.json -l "$app" -a "$(adb shell getprop ro.product.cpu.abi)" && {
+            split_apk_pattern=$(\ls "$path_apk"/*split*.apk 2>/dev/null)
+            for split_apk in $split_apk_pattern; do
+                if [ -f "$split_apk" ]; then
+                    objection signapk "$split_apk_pattern"
+                fi
+            done
+        }
+        rm -rf ./cfgobjection.json
+    elif [[ $1 == "m" ]]; then
+        need apk-mitm
+        cert="./cert"
+        url="http://127.0.0.1:8080/$cert"
+        if wget --spider --quiet "$URL"; then
+            wget "$url" -o "$cert"
+            if [ ! -f "$cert" ]; then
+                apk-mitm --certificate "$cert" base.apk
+            else
+                apk-mitm base.apk
+            fi
+        fi
+    elif [[ $1 == "s" ]]; then
+        if [[ -z $2 ]]; then
+            echo "Provide Apk Path"
+        else
+            keystore="android.keystore"
+            if [[ ! -f "./$keystore" ]]; then
+                keytool -genkey -v -keystore $keystore -keyalg RSA -keysize 2048 -validity 1000 -alias android
+            fi
+            alligned_apk="alligned-$(basename "$path_apk")"
+            zipalign -v 4 "$path_apk" "$alligned_apk"
+            apksigner sign -ks $keystore "$alligned_apk"
+            apksigner verify "$alligned_apk"
+        fi
+    fi
+fi

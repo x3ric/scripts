@@ -1,0 +1,19 @@
+#!/bin/bash
+# Steghide simple embed
+need() {
+  if ! pacman -Q $1 &>/dev/null; then
+    if pacman -Q yay &>/dev/null; then
+      sudo pacman --noconfirm --needed -Sy $1
+    else
+      echo "Error: Could not find a package manager to install $1."
+      exit 1
+    fi
+  fi
+}
+need steghide
+[[ -z $1 && -z $2 ]] && echo -e "usage --> steghide-embed <file> <content> <password>\n  password is optional\n  ex. steghide-embed foto.jpg flag.txt iloveyou" && exit 0
+if [[ -z $3 ]]; then
+  steghide embed -cf "$1" -ef "$2"
+else 
+  steghide embed -cf "$1" -ef "$2" -p "$3"
+fi

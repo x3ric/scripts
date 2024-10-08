@@ -1,0 +1,8 @@
+#!/bin/zsh -i
+# Frida Help
+need android-apktool-bin
+need apk-tools
+need jq
+local_dir="$HOME/.local/opt/Frida"
+app=$(adb shell pm list packages | sed 's/package://' | fzf-splitted)
+echo -e "Frida Scripts in https://codeshare.frida.re/browse\nexamples\n objection -g \"$app\" explore\n frida -U -f \"$app\" -l bypass.js\n frida -U -f \"$app\" --codeshare akabe1/frida-multiple-unpinning"

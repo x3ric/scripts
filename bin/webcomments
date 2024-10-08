@@ -1,0 +1,17 @@
+#!/bin/bash
+# Extract Websites Comments
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 <URL or IP>"
+  exit 1
+fi
+
+url_ip=$1
+comments=$(curl -s "$url_ip" | grep -oP '<!--[\s\S]*?-->')
+
+if [ -z "$comments" ]; then
+  echo "No comments found on $url_ip."
+else
+  echo "Comments found on $url_ip:"
+  echo "$comments"
+fi

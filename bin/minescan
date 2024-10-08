@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+# Minecraft Online Server Scanner
+import json
+import socket
+import struct
+import base64
+import signal
+import os
+import threading
+from colorama import Fore as Color
+timeout = 10 # Timeout of ip checking
+class Server:
+    def __init__(self, data):
+        self.description = data.get('description', {}).get('text', 'No description')
+        self.icon = base64.b64decode(data.get('favicon', '')[22:])
+        self.players = Players(data['players'])
+        self.version = data['version']['name']
+        self.protocol = data['version']['protocol']
+    @staticmethod
+    def getVersion(data):
+        return data['version']['name']
+    @staticmethod
+    def getDesc(data):
+        return data.get('description', {}).get('text', 'No description')
+    @staticmethod
+    def getIcon(data):
+        return base64.b64decode(data.get('favicon', '')[22:])
+    @staticmethod
+    def getProt(data):
+        return data['version']['protocol']
+    @staticmethod
+    def getPlayers(data):
+        return Players(data['players'])
+class Players(list):
+    def __init__(self, data):
+        super().__init__([Player(x) for x in data.get('sample', [])])
+        self.max = data['max']
+        self.online = data['online']
+    def __str__(self):
+        return f'{self.online}/{self.max}'
+class Player:
+    def __init__(self, data):
+        self.id = data['id']
+        self.name = data['name']
+    def __str__(self):
+        return self.name
+def ping(ip, port=25565):
+    def read_var_int(sock):
+        i = 0
+        j = 0
+        while True:
+            k = sock.recv(1)
+            if not k:
+                return 0
+            k = k[0]
+            i |= (k & 0x7f) << (j * 7)
+            j += 1
+            if j > 5:
+                raise ValueError('var_int too big')
+            if not (k & 0x80):
+                return i
+    sock = socket.socket()
+    sock.settimeout(timeout)
+    try:
+        sock.connect((ip, port))
+        host = ip.encode('utf-8')
+        data = b'\x00\x04' + struct.pack('>b', len(host)) + host + struct.pack('>H', port) + b'\x01'
+        data = struct.pack('>b', len(data)) + data
+        sock.sendall(data + b'\x01\x00')
+        length = read_var_int(sock)
+        if length < 10:
+            if length < 0:
+                raise ValueError('negative length read')
+            else:
+                raise ValueError(f'invalid response (length {length})')
+        sock.recv(1)
+        length = read_var_int(sock)
+        data = b''
+        while len(data) != length:
+            chunk = sock.recv(length - len(data))
+            if not chunk:
+                raise ValueError('connection aborted')
+            data += chunk
+        dtolad = json.loads(data.decode('utf-8'))
+        server_info = {
+            'description': Server.getDesc(dtolad),
+            'version': Server.getVersion(dtolad),
+            'players': Server.getPlayers(dtolad),
+            'protocol': Server.getProt(dtolad)
+        }
+        return server_info
+    except socket.timeout:
+        return f"Connection timeout"
+    except (socket.error, ValueError) as e:
+        return f"{e}"
+    finally:
+        sock.close()
+
+def check_ip(ip, port):
+    try:
+        server_info = ping(ip, port)
+        ip_port_str = f"{Color.LIGHTBLUE_EX}{ip}:{port}{Color.WHITE}"
+        if isinstance(server_info, dict):
+            print(f"{Color.LIGHTBLUE_EX}[{Color.YELLOW}+{Color.LIGHTBLUE_EX}] {Color.RED}Success Finding  IP {ip_port_str.ljust(32)}{Color.LIGHTGREEN_EX} {Color.LIGHTGREEN_EX}PLAYERS: {Color.YELLOW}{str(server_info['players']).ljust(3)} {Color.LIGHTGREEN_EX}PROTOCOL: {Color.YELLOW}{str(server_info['protocol']).ljust(3)} \n{Color.LIGHTGREEN_EX} ↳ VERSION{Color.WHITE} → {Color.WHITE}{server_info['version']}\n{Color.LIGHTGREEN_EX}  ↳ DESCRIPTION{Color.WHITE} → {server_info['description']}")
+        else: 
+            print(f"{Color.LIGHTBLUE_EX}[{Color.YELLOW}-{Color.LIGHTBLUE_EX}] {Color.RED}Error Checking   IP {ip_port_str.ljust(32)} {server_info}")
+    except Exception as e:
+        pass
+def scan_ips(ips):
+    port = 25565
+    for ip in ips:
+        check_ip(ip, port)
+def load_ips_from_file(file_path):
+    ip_list = []
+    try:
+        with open(file_path, 'r') as f:
+            ip_list.extend([line.strip() for line in f if line.strip()])
+    except FileNotFoundError:
+        print(f"{Color.YELLOW}File not found: {file_path}")
+    return ip_list
+def main():
+    ip_file = os.path.join(os.getenv('HOME'), '.cache', 'ip.25565')
+    signal.signal(signal.SIGINT, lambda signal, frame: (print(f"\n{Color.WHITE}Exiting..."), os._exit(0)))
+    try:
+        ip_list = load_ips_from_file(ip_file)
+        if not ip_list:
+            print(f"{Color.RED}Get public minecraft server ip by running {Color.YELLOW}-> {Color.WHITE}ipfinder 25565")
+            print(f"{Color.YELLOW}No valid IPs found in {ip_file}")
+            return
+        print(f"{Color.RED}Scanning IPs from file {Color.WHITE}-> {Color.LIGHTGREEN_EX}{ip_file}")
+        threads = []
+        chunk_size = len(ip_list) // 10
+        ip_chunks = [ip_list[i:i + chunk_size] for i in range(0, len(ip_list), chunk_size)]
+        for i in range(10):
+            t = threading.Thread(target=scan_ips, args=(ip_chunks[i],))
+            threads.append(t)
+            t.start()
+        for t in threads:
+            t.join()
+        print(f"{Color.LIGHTGREEN_EX}SCAN COMPLETED!")
+    except Exception as e:
+        print(f"{Color.RED}An error occurred: {e}")
+    finally:
+        print(f"\n{Color.WHITE}Exiting...")
+if __name__ == "__main__":
+    main()

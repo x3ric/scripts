@@ -1,0 +1,29 @@
+#!/bin/bash
+# Nasa Picture of the Day and Info with the api
+# Generated in https://api.nasa.gov/?Generate%20API%20Key and put in a env personal_nasa_api_key
+response=$(curl -s "https://api.nasa.gov/planetary/apod?api_key=${personal_nasa_api_key}")
+if ! command -v jq &> /dev/null; then
+    echo -e "\e[31mjq is required but not installed. Please install jq and run the script again.\e[0m"
+    exit 1
+fi
+title=$(echo "$response" | jq -r '.title')
+date=$(echo "$response" | jq -r '.date')
+copyright=$(echo "$response" | jq -r '.copyright')
+explanation=$(echo "$response" | jq -r '.explanation' | fold -s)
+hdurl=$(echo "$response" | jq -r '.hdurl')
+url=$(echo "$response" | jq -r '.url')
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+echo -e "${GREEN}Title: ${NC}$title"
+echo -e "${YELLOW}Date: ${NC}$date"
+echo -e "${CYAN}Copyright: ${NC}$copyright"
+echo -e "${MAGENTA}Explanation: ${NC}$explanation"
+echo -e "${BLUE}URL: ${NC}$url"
+image_path="/tmp/nasa_apod_image.jpg"
+curl -s -o "$image_path" "$url"| fold -w 80 -s
+kitty icat --align=left "$image_path" 

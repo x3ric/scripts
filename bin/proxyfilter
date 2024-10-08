@@ -1,0 +1,46 @@
+#!/bin/bash
+# Proxy filter
+filter_proxies() {
+    local input_file="$1"
+    local site="$2"
+    domain=$(echo "$url" | awk -F[/:] '{print $4}')
+    output_file="${input_file%.txt}_${domain}.txt"
+    if [ ! -f "$input_file" ]; then
+        echo "Input file '$input_file' not found."
+        return 1
+    fi
+    rm -f "$output_file"
+    while IFS=: read -r ip port; do
+        if [ -z "$port" ]; then
+            case $type in
+                "socks4" | "socks5") port=1080 ;;
+                "http") port=8080 ;;
+                *) echo "Invalid proxy type. Available types: socks4, socks5, http"; exit 1 ;;
+            esac
+        fi
+        (curl -x "$ip:$port" -m 5 --output /dev/null --silent --head --fail "$site" && echo "$ip:$port" >> "$output_file") &
+    done < "$input_file"
+    wait
+}
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <site> <type>"
+    exit 1
+fi
+site=$1
+type=$2
+case $type in
+    "socks4")
+        filter_proxies "$HOME/.cache/socks4.txt" "$site"
+        ;;
+    "socks5")
+        filter_proxies "$HOME/.cache/socks5.txt" "$site"
+        ;;
+    "http")
+        filter_proxies "$HOME/.cache/http.txt" "$site"
+        ;;
+    *)
+        echo "Invalid proxy type. Available types: socks4, socks5, http"
+        exit 1
+        ;;
+esac
+

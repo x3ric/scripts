@@ -1,0 +1,5 @@
+#!/bin/zsh -i
+# Smb Scanner
+need python-termcolor
+need smbmap
+smbmap.py "$@"
