@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install Penterst Tools
+# Install Pentest Tools
 packages=(
     nmap
     openvpn
