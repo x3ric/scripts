@@ -1,6 +1,5 @@
-#!/bin/bash
+#!/bin/zsh -i
 # Bluetooth Keystrokes Sender
-sudo pacman -Sy --noconfirm
 need bluez-tools
 need bluez-utils
 need bluez-deprecated-tools

@@ -1,0 +1,4 @@
+#!/bin/zsh -i
+# Nmap Scripts Lister
+find /usr/share/nmap/scripts/ -type f -name '*.nse' | xargs grep categories
+echo -e "\nIn Nmap do --script <path or category>"

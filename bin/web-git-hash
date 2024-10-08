@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+# GitHub Commit Bruteforcer
+import sys
+import hashlib
+import itertools
+import string
+import aiohttp
+import asyncio
+import signal
+import random
+
+def compute_git_hash(commit_message, timestamp):
+    header = f"commit {len(commit_message)}\0"
+    data = f"tree <tree_sha1>\nparent <parent_sha1>\nauthor <author>\ncommitter <committer> {timestamp} +0000\n\n{commit_message}\n"
+    full_data = header + data
+    sha1 = hashlib.sha1()
+    sha1.update(full_data.encode('utf-8'))
+    return sha1.hexdigest()
+
+def get_random_proxy(proxy_file):
+    with open(proxy_file, 'r') as f:
+        proxies = [line.strip() for line in f.readlines()]
+    chosen_proxy = random.choice(proxies)
+    return f"http://{chosen_proxy}"
+
+async def check_commit(session, full_url, proxy=None):
+    try:
+        if proxy:
+            async with session.get(full_url, proxy=proxy) as response:
+                if response.status != 404:
+                    print(f"Valid path found: {full_url} - Status code: {response.status}")
+                    return full_url
+        else:
+            async with session.get(full_url) as response:
+                if response.status != 404:
+                    print(f"Valid path found: {full_url} - Status code: {response.status}")
+                    return full_url
+    except Exception as e:
+        print(f"Error accessing {full_url}: {e}")
+    return None
+
+async def brute_force_git_commit(url, length=4, proxy_file=None):
+    chars = string.ascii_lowercase + string.digits
+    proxies = None
+    if proxy_file:
+        proxies = get_random_proxy(proxy_file)
+    async with aiohttp.ClientSession() as session:
+        while True:
+            print(f"Trying combinations with length: {length}")
+            tasks = []
+            for commit_message_tuple in itertools.product(chars, repeat=length):
+                commit_message = ''.join(commit_message_tuple)
+                full_url = f"{url}/{commit_message}"
+                tasks.append(check_commit(session, full_url, proxies))
+                if len(tasks) > 100:
+                    results = await asyncio.gather(*tasks)
+                    if any(results):
+                        return results
+                    tasks = []
+            if tasks:
+                await asyncio.gather(*tasks)
+            length += 1
+
+def signal_handler(sig, frame):
+    print("\nProcess interrupted. Exiting.")
+    sys.exit(0)
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal_handler)
+    if len(sys.argv) < 2:
+        print("Usage: web-git-hash <url> [-p proxy_file]")
+        sys.exit(1)
+    target_url = sys.argv[1]
+    proxy_file = None
+    if len(sys.argv) == 4 and sys.argv[2] == '-p':
+        proxy_file = sys.argv[3]
+    asyncio.run(brute_force_git_commit(target_url, length=4, proxy_file=proxy_file))
