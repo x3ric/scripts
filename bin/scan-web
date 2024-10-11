@@ -10,7 +10,7 @@ if [ -z "$1" ]; then
 fi
 
 IP=$1
-SCAN_DIRECTORY="$(enum-dir "$IP")"
+SCAN_DIRECTORY="$(scan-dir "$IP")"
 OUTPUT_FILE="$SCAN_DIRECTORY/web.scan"
 
 echo "Running WhatWeb..." | tee -a "$OUTPUT_FILE"

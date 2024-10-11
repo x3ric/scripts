@@ -39,6 +39,17 @@ case "$ACTION" in
         need ffuf
         ffuf -H "Host: FUZZ.$URL" -u "$URL" -w "/usr/share/dict/SecLists/Discovery/DNS/bitquark-subdomains-top100000.txt" "${@:3}"
         ;;
+    "subdomain")
+        need ffuf
+        CLEAN_URL="${URL#http://}"
+        CLEAN_URL="${CLEAN_URL#https://}"
+        if [[ "$URL" =~ ^https:// ]]; then
+            PROTOCOL="https"
+        else
+            PROTOCOL="http"
+        fi
+        ffuf -u "$PROTOCOL://FUZZ.$CLEAN_URL" -c -w /usr/share/dict/SecLists/Discovery/DNS/subdomains-top1million-5000.txt "${@:3}"
+        ;;
     "dir")
         need ffuf
         ffuf -u "$URL/FUZZ" -w "/usr/share/dict/SecLists/Discovery/Web-Content/raft-large-directories.txt" -e .php,.asp,.txt,.php.old,.html,.php.bak,.bak,.aspx "${@:3}"

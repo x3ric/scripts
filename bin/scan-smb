@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-scan_directory="$(enum-dir "$target")"
+scan_directory="$(scan-dir "$target")"
 mkdir -p "$scan_directory"
 output_file="$scan_directory/smb.scan"
 touch "$output_file"

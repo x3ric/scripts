@@ -1,5 +1,4 @@
 export PATH="/home/e/.local/opt/Frida/venv/bin:$PATH"
-export PATH="/home/e/.local/zsh/Internal/scripts/bin/hacking:$PATH"
 export PATH="/home/e/.local/zsh/Internal/scripts/bin:$PATH"
 
 # Utils

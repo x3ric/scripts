@@ -2,6 +2,6 @@
 # Joomla Scan
 need joomscan
 need nmap
-SCAN_DIRECTORY="$(enum-dir "$IP")"
+SCAN_DIRECTORY="$(scan-dir "$IP")"
 OUTPUT_FILE="$SCAN_DIRECTORY/joomla.scan"
 joomscan --url "$1" -ec  | tee -a "$OUTPUT_FILE"
