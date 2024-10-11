@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deauth WiFi hotspot
+# Deauth Acces Points
 for cmd in aircrack-ng fzf; do
     if ! command -v $cmd &> /dev/null; then
         yes '' | yay --needed --noconfirm $cmd

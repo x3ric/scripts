@@ -1,11 +1,7 @@
 #!/bin/bash
 # Hash bruteforcer
-need dirbuster-wordlists
-need dirb
-need john
+dictlist
 need python-name-that-hash
-need hashcat
-need rockyou
 gpu_vendor=$(lspci | grep -i -E 'vga|3d' | grep -i -E 'nvidia|amd')
 hip_installed=$(pacman -Qq | grep -E 'hip-runtime-nvidia|hip-runtime-amd')
 if [[ -z "$hip_installed" ]]; then
@@ -21,6 +17,7 @@ list() {
     list=$(zsh -ci 'find /usr/share/dict/ /usr/share/dirb/wordlists/ -type f -name "*.txt" | fzf-splitted')
 }
 if [[ $1 == 'zip2john' ]];then
+    need john
     list
     zip2john $2 > /tmp/zip_hash.txt
     john --wordlist="$list" /tmp/zip_hash.txt "$@"
@@ -28,6 +25,7 @@ if [[ $1 == 'zip2john' ]];then
     rm /tmp/zip_hash.txt
     exit
 elif [[ $1 == 'ssh2john' ]];then
+    need john
     list
     ssh2john $2 > /tmp/ssh_hash.txt
     shift 2
@@ -36,6 +34,7 @@ elif [[ $1 == 'ssh2john' ]];then
     rm /tmp/ssh_hash.txt
     exit
 elif [[ $1 == 'john' ]]; then
+    need john
     list
     echo "$2" > /tmp/hash.txt
     shift 2
@@ -43,6 +42,7 @@ elif [[ $1 == 'john' ]]; then
     john --wordlist="$list" --format="$format" "/tmp/hash.txt" "$@"
     [[ -f "$HOME/.john/john.pot" ]] && john --show=left --format="$format" "$HOME/.john/john.pot"
 else
+    need hashcat
     list
     echo "$1" > /tmp/hash.txt
     shift 1

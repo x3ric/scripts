@@ -1,0 +1,10 @@
+#!/bin/bash
+# Directory to preserve enumerated information
+if [ -z "$1" ]; then
+  echo "Usage: $0 <ip/domain/url>"
+  exit 1
+fi
+NAME=$(echo "$1" | sed -E 's|https?://||; s|/.*||; s|[.:/]|-|g')
+SCAN_DIRECTORY="$HOME/Documents/Domains/$NAME"
+mkdir -p "$SCAN_DIRECTORY"
+echo "$SCAN_DIRECTORY"

@@ -1,0 +1,23 @@
+#!/bin/bash
+# Webpage vulnerability scanner
+need nikto
+need whatweb
+need wafw00f
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 <domain> [Wordlist]"
+    exit 1
+fi
+
+IP=$1
+SCAN_DIRECTORY="$(enum-dir "$IP")"
+OUTPUT_FILE="$SCAN_DIRECTORY/web.scan"
+
+echo "Running WhatWeb..." | tee -a "$OUTPUT_FILE"
+whatweb -a 3 "$IP" | tee -a "$OUTPUT_FILE"
+
+echo "Running Wafw00f..." | tee -a "$OUTPUT_FILE"
+wafw00f "$1" | tee -a "$OUTPUT_FILE"
+
+echo "Running Nikto..." | tee -a "$OUTPUT_FILE"
+nikto -host "$IP" | tee -a "$OUTPUT_FILE"

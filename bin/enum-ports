@@ -1,0 +1,52 @@
+#!/bin/bash
+# Complete Port Scan
+need nmap
+need masscan
+if [ -z "$1" ]; then
+    echo "Usage: $0 <ip/domain/url> [tcp|udp|full|masscan] [extra-options]"
+    exit 1
+fi
+
+TARGET="$1"
+SCAN_TYPE="${2:-tcp}"
+EXTRA_OPTIONS="${@:3}"
+NAME=$(echo "$TARGET" | sed -E 's|https?://||; s|/.*||; s|[.:/]|-|g')
+SCAN_DIRECTORY="$(enum-dir $1)"
+mkdir -p "$SCAN_DIRECTORY"
+OUTPUT_FILE="$SCAN_DIRECTORY/ports.scan"
+NMAP_CMD="nmap -T4 --min-rate 1000"
+MASSCAN_CMD="masscan --rate=1000"
+
+scan_tcp() {
+    echo -e "\n[TCP-Scan]-> $NMAP_CMD -sCV -A $TARGET $EXTRA_OPTIONS\n" | tee -a "$OUTPUT_FILE"
+    $NMAP_CMD -sCV -A "$TARGET" $EXTRA_OPTIONS | tee -a "$OUTPUT_FILE"
+}
+
+scan_udp() {
+    echo -e "\n[UDP-Scan]-> sudo $NMAP_CMD -sU --open $TARGET $EXTRA_OPTIONS\n" | tee -a "$OUTPUT_FILE"
+    sudo $NMAP_CMD -sU --open "$TARGET" $EXTRA_OPTIONS | tee -a "$OUTPUT_FILE"
+}
+
+scan_full() {
+    echo -e "\n[Full-Scan]-> sudo $NMAP_CMD -p- -sCV -A $TARGET $EXTRA_OPTIONS\n" | tee -a "$OUTPUT_FILE"
+    sudo $NMAP_CMD -p- -sCV -A "$TARGET" $EXTRA_OPTIONS | tee -a "$OUTPUT_FILE"
+}
+
+scan_masscan() {
+    echo -e "\n[Mass-Scan]-> sudo $MASSCAN_CMD $TARGET $EXTRA_OPTIONS\n" | tee -a "$OUTPUT_FILE"
+    sudo $MASSCAN_CMD "$TARGET" $EXTRA_OPTIONS | tee -a "$OUTPUT_FILE"
+}
+
+run_scan() {
+    case "$SCAN_TYPE" in
+        tcp) scan_tcp ;;
+        udp) scan_udp ;;
+        full) scan_full ;;
+        masscan) scan_masscan ;;
+        *) echo "Invalid scan type: $SCAN_TYPE. Choose 'tcp', 'udp', 'full', or 'masscan'."
+           exit 1 ;;
+    esac
+}
+
+run_scan
+echo -e "\nScan completed. Results saved in: $OUTPUT_FILE"

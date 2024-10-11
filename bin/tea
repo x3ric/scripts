@@ -1,0 +1,7 @@
+#!/bin/bash
+# Tee Append without duplicates
+file="$1"
+[ ! -f "$file" ] && touch "$file"
+while IFS= read -r line; do
+    grep -qxF "$line" "$file" || echo "$line" | tee -a "$file"
+done

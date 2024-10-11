@@ -22,4 +22,8 @@ cd $HOME/.local/www
 lspwd
 echo -e "Copied -> curl -s http://$vpn:8000/$file"
 echo -en "curl -s http://$vpn:8000/$file" | xclip -sel clip
-python -m http.server
+if type python3 >/dev/null 2>&1; then
+    python3 -m http.server
+else
+    python -m SimpleHTTPServer
+fi

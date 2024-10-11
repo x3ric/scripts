@@ -1,0 +1,6 @@
+#!/bin/zsh -i
+# WordPress vulnerability scanner
+need wpscan-git
+SCAN_DIRECTORY="$(enum-dir "$IP")"
+OUTPUT_FILE="$SCAN_DIRECTORY/wordpress.scan"
+wpscan --rua -e ap,at,tt,cb,dbe,u,m --url "$1" --plugins-detection aggressive --api-token "$personal_wpscan_token" | tee -a "$OUTPUT_FILE"

@@ -1,0 +1,15 @@
+#!/bin/bash
+# Probe Http List
+input_file="$1"
+output_file="$2"
+temp_file=$(mktemp)
+[ ! -f "$input_file" ] && echo "Input file not found!" && exit 1
+[ -z "$output_file" ] && echo "No output file specified!" && exit 1
+while IFS= read -r domain; do
+    if curl -s --head --request GET "https://$domain" | grep "200 OK" > /dev/null; then
+        echo "https://$domain" >> "$temp_file"
+    elif curl -s --head --request GET "http://$domain" | grep "200 OK" > /dev/null; then
+        echo "http://$domain" >> "$temp_file"
+    fi
+done < "$input_file"
+mv "$temp_file" "$output_file"

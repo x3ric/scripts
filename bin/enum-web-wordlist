@@ -1,0 +1,7 @@
+#!/bin/zsh -i
+# Webpage WordList Generator
+need cewl
+url="$1"
+cd "$(enum-dir "$url")"
+base=$(basename $url)
+cewl "$(ipofsite $1)" | sed '1d' > "./$base.wordlist"

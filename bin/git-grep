@@ -4,4 +4,15 @@ if [ -z "$1" ]; then
     echo "Usage: git-grep <pattern>"
     exit 1
 fi
-git log --all -p | grep -E "$1"
+# git log --all -p | grep -E "$1" # old version
+{
+    find .git/objects/pack/ -name "*.idx" | while read i; do
+        git show-index < "$i" | awk '{print $2}';
+    done;
+    
+    find .git/objects/ -type f | 
+        grep -v '/pack/' |
+        awk -F'/' '{print $(NF-1)$NF}';
+} | while read o; do
+    git cat-file -p $o | awk "{print \"$o: \" \$0  }";
+done | grep $@

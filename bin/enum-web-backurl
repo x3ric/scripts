@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+# Fetch Urls From WayBack Machine
+import argparse
+import asyncio
+import aiohttp
+import json
+import os
+import sys
+from urllib.parse import urlparse
+from datetime import datetime
+
+class Wurl:
+    def __init__(self, date, url):
+        self.date = date
+        self.url = url
+
+async def get_wayback_urls(session, domain, no_subs):
+    subs_wildcard = "" if no_subs else "*."
+    url = f"http://web.archive.org/cdx/search/cdx?url={subs_wildcard}{domain}/*&output=json&collapse=urlkey"
+    async with session.get(url) as res:
+        if res.status != 200: return []
+        data = await res.json()
+        return [Wurl(urls[1], urls[2]) for urls in data[1:]]
+
+async def get_commoncrawl_urls(session, domain, no_subs):
+    subs_wildcard = "" if no_subs else "*."
+    url = f"http://index.commoncrawl.org/CC-MAIN-2024-38-index?url={subs_wildcard}{domain}/*&output=json"
+    async with session.get(url) as res:
+        if res.status != 200: return []
+        out = []
+        async for line in res.content:
+            try:
+                wrapper = json.loads(line.decode())
+                if 'timestamp' in wrapper and 'url' in wrapper:
+                    out.append(Wurl(wrapper['timestamp'], wrapper['url']))
+            except json.JSONDecodeError:
+                continue
+        return out
+
+async def get_virustotal_urls(session, domain, _):
+    api_key = os.getenv("VT_API_KEY")
+    if not api_key: return []
+    url = f"https://www.virustotal.com/vtapi/v2/domain/report?apikey={api_key}&domain={domain}"
+    async with session.get(url) as res:
+        if res.status != 200: return []
+        data = await res.json()
+        return [Wurl("", u['url']) for u in data.get('detected_urls', [])]
+
+def is_subdomain(raw_url, domain):
+    try: return urlparse(raw_url).hostname.lower() != domain.lower()
+    except: return False
+
+async def get_versions(session, u):
+    url = f"http://web.archive.org/cdx/search/cdx?url={u}&output=json"
+    async with session.get(url) as res:
+        if res.status != 200: return []
+        data = await res.json()
+        seen, out = set(), []
+        for s in data[1:]:
+            if s[5] not in seen:
+                seen.add(s[5])
+                out.append(f"https://web.archive.org/web/{s[1]}if_/{s[2]}")
+        return out
+
+async def process_domain(session, domain, args, fetch_fns):
+    try:
+        if args.get_versions:
+            versions = await get_versions(session, domain)
+            print("\n".join(versions))
+        else:
+            wurls, tasks = set(), [fn(session, domain, args.no_subs) for fn in fetch_fns]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception): continue
+                for w in result:
+                    if args.no_subs and is_subdomain(w.url, domain): continue
+                    wurls.add(w)
+            for w in sorted(wurls, key=lambda x: x.date):
+                if args.dates:
+                    try: print(f"{datetime.strptime(w.date, '%Y%m%d%H%M%S').isoformat()} {w.url}")
+                    except: print(f"{w.url}")
+                else: print(w.url)
+    except Exception as e: print(f"Error processing {domain}: {e}", file=sys.stderr)
+
+async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dates", action="store_true")
+    parser.add_argument("--no-subs", action="store_true")
+    parser.add_argument("--get-versions", action="store_true")
+    parser.add_argument("domains", nargs="*")
+    args = parser.parse_args()
+    domains = args.domains or [line.strip() for line in sys.stdin]
+    fetch_fns = [get_wayback_urls, get_commoncrawl_urls, get_virustotal_urls]
+    async with aiohttp.ClientSession() as session:
+        tasks = [process_domain(session, domain, args, fetch_fns) for domain in domains]
+        await asyncio.gather(*tasks)
+
+if __name__ == "__main__":
+    try: asyncio.run(main())
+    except KeyboardInterrupt: sys.exit(1)

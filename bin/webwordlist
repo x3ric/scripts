@@ -1,9 +1,0 @@
-#!/bin/zsh -i
-# Webpage WordList Generator
-need cewl
-url="$1"
-base=$(basename $url)
-dir="$HOME/.cache/cewl/"
-mkdir -p "$dir"
-filename="$dir/$base.wordlist"
-cewl "$(ipofsite $1)" | sed '1d' > "$filename"

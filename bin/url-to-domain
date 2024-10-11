@@ -1,0 +1,7 @@
+#!/bin/bash
+# Convert Url To Domains
+sed -r 's#https?://##I' |
+sed -r 's#/.*##' |
+sed -r 's#^\*\.?##' |
+sed -r 's#,#\n#g' |
+tr '[:upper:]' '[:lower:]'

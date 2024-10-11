@@ -1,0 +1,9 @@
+#!/bin/bash
+# Dictionary Downloader /usr/share/dict
+if [[ ! -d "/usr/share/dict/SecLists" ]];then
+  cd /usr/share/dict/
+  sudo git clone --depth 1 https://github.com/danielmiessler/SecLists.git
+fi
+need dirbuster-wordlists
+need rockyou
+need dirb

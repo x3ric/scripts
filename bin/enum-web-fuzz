@@ -1,0 +1,50 @@
+#!/bin/zsh -i
+# Web Fuzzing
+dictlist
+need gobuster
+print_help() {
+  echo -e "Usage: $0 <url> <action> [extra options]\n\nActions:\n  crawl         Crawl URLs using gau and katana\n  buster        Fuzz URLs using gobuster (select type)\n  subbuster     Bruteforce subdomains using gobuster\n  sub           Discover subdomains using subfinder\n  vhost         Fuzz vhosts using ffuf\n  dir           Fuzz directories using ffuf (optional wordlist)\n\nExamples:\n  $0 example.com crawl\n  $0 example.com buster\n  $0 example.com subbuster\n  $0 example.com dir -t 50\n  $0 example.com vhost -t 100\n\nYou can also provide additional options to each action, like proxy settings, threads, etc."
+}
+if [[ $# -lt 2 ]]; then
+    print_help
+    exit 1
+fi
+URL=$1
+ACTION=$2
+if [[ ! "$URL" =~ ^https?:// ]]; then
+    URL="http://$URL"
+fi
+case "$ACTION" in
+    "crawl")
+        need gau
+        need katana-git
+        echo "$URL" | gau --threads 5 "${@:3}" >> url.txt
+        katana -u url.txt > target.txt "${@:3}"
+        rm -rf url.txt
+        ;;
+    "buster")
+        type=$(zsh -ci 'echo -e "dns\nvhost\ndir" | fzf-splitted')
+        list=$(zsh -ci 'find /usr/share/dict/ /usr/share/dirb/wordlists/ -type f | fzf-splitted')
+        gobuster "$type" --url "$URL" -w "$list" "${@:3}"
+        ;;
+    "subbuster")
+        list=$(zsh -ci 'find /usr/share/dict/ /usr/share/dirb/wordlists/ -type f | fzf-splitted')
+        gobuster dns --domain "$URL" -w "$list" "${@:3}"
+        ;;
+    "sub")
+        need subfinder
+        subfinder -d "$URL" "${@:3}"
+        ;;
+    "vhost")
+        need ffuf
+        ffuf -H "Host: FUZZ.$URL" -u "$URL" -w "/usr/share/dict/SecLists/Discovery/DNS/bitquark-subdomains-top100000.txt" "${@:3}"
+        ;;
+    "dir")
+        need ffuf
+        ffuf -u "$URL/FUZZ" -w "/usr/share/dict/SecLists/Discovery/Web-Content/raft-large-directories.txt" -e .php,.asp,.txt,.php.old,.html,.php.bak,.bak,.aspx "${@:3}"
+        ;;
+    *)
+        need dirb
+        dirb "$URL" -r -l -w -t 200 -f "${@:3}"
+        ;;
+esac

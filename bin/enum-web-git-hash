@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GitHub Commit Bruteforcer
+# Git Commit Hash Bruteforcer
 import sys
 import hashlib
 import itertools

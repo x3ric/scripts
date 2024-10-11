@@ -1,0 +1,65 @@
+#!/bin/zsh -i
+# Smb Scanner
+need python-termcolor
+need smbmap
+need smbclient
+need enum4linux-ng
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: $0 <target> [-u username] [-p password] [--dump]"
+    exit 1
+fi
+
+target="$1"
+shift
+username=""
+password=""
+dump_files=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--username) username="$2"; shift 2 ;;
+        -p|--password) password="$2"; shift 2 ;;
+        --nodump) dump_files=true; shift ;;
+        *) echo "Error: Unknown option $1"; exit 1 ;;
+    esac
+done
+
+scan_directory="$(enum-dir "$target")"
+mkdir -p "$scan_directory"
+output_file="$scan_directory/smb.scan"
+touch "$output_file"
+
+echo "[INFO] Scan started at: $(date)" | tee -a "$output_file"
+echo "[INFO] Target: $target" | tee -a "$output_file"
+[[ -n $username ]] && echo "[INFO] Username: $username" | tee -a "$output_file"
+[[ -n $password ]] && echo "[INFO] Password: [PROTECTED]" | tee -a "$output_file"
+
+run_smb_operations() {
+    echo "[SmbMap] Running smbmap..." | tee -a "$output_file"
+    smbmap -H $target -u "$username" -p "$password" | tee -a "$output_file"
+
+    echo "[Enum4Linux-NG] Running enum4linux-ng..." | tee -a "$output_file"
+    enum4linux-ng -u "$username" -p "$password" -A $target -d | tee -a "$output_file"
+
+    echo "[SmbClient] Listing SMB shares on $target..." | tee -a "$output_file"
+    smbclient -L "$target" -U "$username%$password" | tee -a "$output_file"
+}
+
+dump_files_from_shares() {
+    if $dump_files; then
+        echo "Attempting to dump files from accessible shares..."
+        smbclient -L "$target" -U "$username%$password" | grep "Disk" | awk '{print $1}' | while read share; do
+            echo "[Dump] Accessing share $share..."
+            mkdir -p "$scan_directory/smb/$share"
+            cd "$scan_directory/smb/$share"
+            smbclient "//$target/$share" -U "$username%$password" -c 'prompt OFF; recurse ON; mget *'
+        done
+    fi
+}
+
+run_smb_operations
+dump_files_from_shares
+
+echo -e "\n[INFO] Scan completed at: $(date)" | tee -a "$output_file"
+echo "Results saved in: $output_file"

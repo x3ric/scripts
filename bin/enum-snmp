@@ -1,0 +1,12 @@
+#!/bin/bash
+# Snmp Enum
+need onesixtyone
+dictlist
+DEFAULT_STRINGS="/usr/share/dict/SecLists/Discovery/SNMP/snmp-onesixtyone.txt"
+WORDLIST="${2:-$DEFAULT_STRINGS}"
+DEFAULT_NETWORK="10.11.1.0"
+NETWORK="${3:-$DEFAULT_NETWORK}"
+HOSTS=$(mktemp --suffix "-$0-hosts-$(date +%Y%m%d)")
+get_hosts "none" "$NETWORK" > "$HOSTS"
+onesixtyone -i "$HOSTS" -c "$WORDLIST"
+rm -f "$HOSTS"

