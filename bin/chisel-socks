@@ -1,0 +1,11 @@
+#!/bin/bash
+# Chisel Tunnel Socks
+need chisel-tunnel 
+if [ "$#" -ne 2 ];
+then
+    echo "[i] Usage: chisel_socks <ip> <server_port>"
+else
+    echo "[+] copied chisel client -v $1:$2 R:socks in clipboard"
+    echo "./chisel client -v $1:$2 R:socks" | xclip -sel c
+    chisel server -v -p $2 --reverse
+fi

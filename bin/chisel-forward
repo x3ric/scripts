@@ -1,0 +1,11 @@
+#!/bin/bash
+# Chisel Port Forward
+need chisel-tunnel 
+if [ "$#" -ne 4 ]; then
+    echo "[i] Usage: chisel_remote <local_ip> <local_port> <remote_ip> <remote_port>"
+else
+    echo "./chisel client $1:8888 R:$2:$3:$4" | xclip -sel clip
+    echo "[+] Copied to clipboard: ./chisel client $1:8888 R:$2:$3:$4"
+    echo "[+] Run this on the target machine"
+    chisel server -p 8888 --reverse
+fi
