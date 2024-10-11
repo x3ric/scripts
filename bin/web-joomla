@@ -1,7 +1,13 @@
 #!/bin/zsh -i
 # Joomla Scan
 need joomscan
-need nmap
+need droopescan
+
 SCAN_DIRECTORY="$(scan-dir "$IP")"
 OUTPUT_FILE="$SCAN_DIRECTORY/joomla.scan"
-joomscan --url "$1" -ec  | tee -a "$OUTPUT_FILE"
+
+echo -e "\n[Droop-Scan]-> droopescan scan joomla --url \"$1\"\n" | tee -a "$OUTPUT_FILE"
+droopescan scan joomla --url "$1" | tee -a "$OUTPUT_FILE"
+
+echo -e "\n[Joom-Scan]-> joomscan --url \"$1\" -ec\n" | tee -a "$OUTPUT_FILE"
+joomscan --url "$1" -ec | tee -a "$OUTPUT_FILE"

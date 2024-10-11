@@ -1,6 +1,7 @@
 #!/bin/bash
 # Install Pentest Tools
 packages=(
+    net-tools
     nmap
     openvpn
     croc
