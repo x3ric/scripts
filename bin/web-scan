@@ -1,6 +1,9 @@
 #!/bin/bash
 # Webpage vulnerability scanner
 need nikto
+need dig
+need whois
+need bind
 need whatweb
 need wafw00f
 
@@ -13,8 +16,17 @@ IP=$1
 SCAN_DIRECTORY="$(scan-dir "$IP")"
 OUTPUT_FILE="$SCAN_DIRECTORY/web.scan"
 
+echo "Running Host..." | tee -a "$OUTPUT_FILE"
+host "$IP" | tee -a "$OUTPUT_FILE"
+
 echo "Running WhatWeb..." | tee -a "$OUTPUT_FILE"
 whatweb -a 3 "$IP" | tee -a "$OUTPUT_FILE"
+
+echo "Running WhoIs..." | tee -a "$OUTPUT_FILE"
+whois "$IP" | tee -a "$OUTPUT_FILE"
+
+echo "Running Dig..." | tee -a "$OUTPUT_FILE"
+dig "$IP" | tee -a "$OUTPUT_FILE"
 
 echo "Running Wafw00f..." | tee -a "$OUTPUT_FILE"
 wafw00f "$1" | tee -a "$OUTPUT_FILE"
