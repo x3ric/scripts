@@ -1,6 +1,10 @@
 #!/bin/bash
 # Install Pentest Tools
 packages=(
+    bloodhound-python # blackarch
+    openldap
+    afl-utils
+    afl++
     net-tools
     bind
     tcpdump

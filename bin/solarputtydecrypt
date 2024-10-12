@@ -1,0 +1,114 @@
+#!/bin/env python3
+import re
+import os
+import sys
+import json
+import base64
+import string
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes, padding
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+def is_printable(text):
+    printable_set = set(string.printable)
+    printable_count = sum(1 for char in text if char in printable_set)
+    total_count = len(text)
+    if total_count == 0:
+        return False
+    return (printable_count / total_count) > 0.9
+
+def clean_gibberish(text):
+    return ''.join(char for char in text if char in string.printable)
+
+def decrypt(passphrase, ciphertext):
+    array = base64.b64decode(ciphertext)
+    salt_size, iv_size = 24, 8
+    salt, iv, encrypted_data = array[:salt_size], array[salt_size:salt_size+iv_size], array[salt_size+iv_size:]
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA1(), length=24, salt=salt, iterations=1000, backend=default_backend()
+    )
+    key = kdf.derive(passphrase.encode())
+    cipher = Cipher(algorithms.TripleDES(key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    padded_data = decryptor.update(encrypted_data) + decryptor.finalize()
+    unpadder = padding.PKCS7(64).unpadder()
+    data = unpadder.update(padded_data) + unpadder.finalize()
+    try:
+        decoded_data = data.decode('utf-8')
+    except UnicodeDecodeError:
+        try:
+            decoded_data = data.decode('latin-1')
+        except UnicodeDecodeError:
+            decoded_data = data.decode('latin-1', errors='ignore')
+    if is_printable(decoded_data):
+        cleaned_data = clean_gibberish(decoded_data)
+        return cleaned_data
+    else:
+        print("Detected gibberish, discarding this part.")
+        return None
+
+def extract_json(data):
+    json_parts = re.findall(r'(\[.*?\]|\{.*?\})', data, re.DOTALL)
+    return json_parts
+
+def try_decrypt_with_password(file_name, password):
+    try:
+        with open(file_name, 'rb') as file:
+            encrypted_data = file.read().strip()
+        decrypted_data = decrypt(password, encrypted_data)
+        json_parts = extract_json(decrypted_data)
+        #print("Extracted JSON parts:", json_parts)
+        for i, json_part in enumerate(json_parts):
+            if not json_part.strip():
+                continue
+            try:
+                parsed_json = json.loads(json_part)
+                if parsed_json == [] or parsed_json == {}:
+                    continue
+                print(f"Parsed JSON Part {i+1}:")
+                print(json.dumps(parsed_json, indent=4))
+            except json.JSONDecodeError as e:
+                print(f"Failed to decode JSON part {i+1}: {e}")
+                print("Raw cleaned part:", json_part)
+        return True
+    except Exception as e:
+        print(f"Error with password '{password}': {e}")
+        return False
+
+def do_import_with_wordlist(file_name, wordlist_path):
+    try:
+        with open(wordlist_path, 'r', encoding='latin-1', errors='ignore') as wordlist_file:
+            passwords = [line.strip() for line in wordlist_file]
+        for password in passwords:
+            print(f"Trying password: {password}")
+            if try_decrypt_with_password(file_name, password):
+                print(f"Success! Correct password is: {password}")
+                return True
+        else:
+            print("No valid password found in the wordlist.")
+            return False
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        return False
+
+def main():
+    try:
+        if len(sys.argv) == 4 and sys.argv[2] == '-w':
+            file_name = sys.argv[1]
+            wordlist_path = sys.argv[3]
+            if not do_import_with_wordlist(file_name, wordlist_path):
+                sys.exit(1)
+        elif len(sys.argv) == 3:
+            file_name, password = sys.argv[1], sys.argv[2]
+            if not try_decrypt_with_password(file_name, password):
+                sys.exit(1)
+        else:
+            print("Usage: python decrypt.py <file_path> <password> or python decrypt.py <file_path> -w <wordlist_path>")
+            sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nProcess interrupted by user (Ctrl + C). Exiting...")
+        sys.exit(0)
+
+if __name__ == "__main__":
+    main()
