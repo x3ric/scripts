@@ -85,7 +85,8 @@ def try_decrypt_with_password(file_name, password):
         return True
 
     except Exception as e:
-        print(f"[-] Failed with password '{password}': {e}")
+        print(f"[-] Failed with password '{password}'")
+        #print(f"{e}")
         return False
 
 def do_import_with_wordlist(file_name, wordlist_path):
