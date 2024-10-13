@@ -1,0 +1,34 @@
+#!/bin/zsh -i
+# Ldap Scan
+need openldap
+need nmap
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <host> [mode]"
+    echo "Modes:"
+    echo "  basic   - Perform basic LDAP search"
+    echo "  context - Extract naming context from LDAP"
+    echo "  nmap    - Run Nmap LDAP script scan"
+    exit 1
+fi
+
+HOST=$1
+MODE=${2:-basic}
+
+case $MODE in
+    basic)
+        ldapsearch -x -H ldap://$HOST -s base "(objectClass=*)" +
+        ;;
+    context)
+        dc=$(ldapsearch -x -H ldap://$HOST -s base -b '' "(objectClass=*)" "namingContexts:" + | grep "dc=" | cut -d ':' -f2 | tr -d ' ')
+        ldapsearch -x -H ldap://$HOST -b "$dc"
+        ;;
+    nmap)
+        nmap -n -sV --script "ldap-search.nse" $HOST
+        ;;
+    *)
+        echo "Invalid mode: $MODE"
+        echo "Valid modes are: basic, context, nmap"
+        exit 2
+        ;;
+esac

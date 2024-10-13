@@ -1,9 +1,14 @@
 #!/bin/bash
 # Dictionary Downloader /usr/share/dict
-if [[ ! -d "/usr/share/dict/SecLists" ]];then
+if [[ ! -d "/usr/share/dict/SecLists" ]];then #https://github.com/danielmiessler/SecLists.git
   cd /usr/share/dict/
   sudo git clone --depth 1 https://github.com/danielmiessler/SecLists.git
 fi
+#if [[ ! -d "/usr/share/dict/AssetNote" ]];then # https://wordlists.assetnote.io/
+#  sudo mkdir -p /usr/share/dict/AssetNote
+#  cd /usr/share/dict/AssetNote
+#  sudo wget -r --no-parent -R "index.html*" https://wordlists-cdn.assetnote.io/data/ -nH -e robots=off
+#fi
 need dirbuster-wordlists
 need rockyou
 need dirb
