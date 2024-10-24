@@ -18,3 +18,14 @@ alias adb-screenshot='adb exec-out screencap -p > ./screenshot.png'
 alias adb-screenrecord='echo -e "Starting recording\nCtrl+c to stop.\nadb pull /sdcard/screenvid.mp4 ./\nto get the video from the device\n" && adb shell screenrecord /sdcard/screenvid.mp4'
 alias adb-keyevent='adb shell input keyevent'
 alias adb-keyevent-help='xdg-open https://developer.android.com/reference/android/view/KeyEvent NUL'
+
+mkcd() { # make directory and cd into it
+    if [ -z "$1" ]; then
+        echo "Usage: mkcd <directory_name>"
+        return 1
+    fi
+    if [ ! -d "$1" ]; then
+        mkdir -p "$1" || { echo "Failed to create directory"; return 1; }
+    fi
+    cd "$(realpath "$1")" || { echo "Failed to change directory"; return 1; }
+}

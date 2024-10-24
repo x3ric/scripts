@@ -20,7 +20,7 @@ packages=(
     jless
     htmlq
     docker
-    gnu-netcat
+    nmap-netcat
     gdb
     hip-runtime-nvidia
     hping
@@ -57,7 +57,7 @@ packages=(
     python-plotly
     typescript
     pinta
-    jython #for burp extension /opt/jython
+    jython # for burp extension /opt/jython
     snyk
 )
 if ! pacman -Qi blackarch-keyring &>/dev/null; then
