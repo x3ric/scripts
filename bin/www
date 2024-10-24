@@ -15,7 +15,7 @@ if [[ ! -z "$1" ]]; then
   mv "$name.tar.gz" $HOME/.local/www
   echo -e "vpn from others -> curl -s http://$vpn:8000/$name.tar.gz\npublic from others -> curl -s http://$(curl -s ifconfig.co):8000/$name.tar.gz -o $name.tar.gz && tar xzf $name.tar.gz && rm $name.tar.gz\nfrom this -> curl -s http://127.0.0.1:8000/$name.tar.gz -o $name.tar.gz && tar xzf $name.tar.gz && rm $name.tar.gz"
 else
-  file=$(zsh -ci "\ls \"$HOME\"/.local/www | fzf-splitted --prompt \"Select a file: \"")
+  file=$(zsh -ci "\find -L "$HOME/.local/www" -maxdepth 5 -print | fzf-splitted --prompt \"Select a file: \"")
   lsip
 fi
 cd $HOME/.local/www

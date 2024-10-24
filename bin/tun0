@@ -2,4 +2,4 @@
 # Show and copy tun0 ip
 need xclip
 ip a | grep -A 2 "tun0:" | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
-ip a | grep -A 2 "tun0:" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | xclip -sel clip
+ip a | grep -A 2 "tun0:" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | tr -d '\n' | xclip -selection i
