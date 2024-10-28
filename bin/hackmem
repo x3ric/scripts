@@ -1,17 +1,8 @@
 #!/bin/zsh
 # Search in memory and change it
-# Deps
-    check_install_dependency() {
-        local dependency=$1
-        local install_command=$2
-        if ! pacman -Q $dependency &> /dev/null; then
-            echo "$dependency could not be found, installing it."
-            eval $install_command
-        fi
-    }
-    check_install_dependency "gdb" "sudo pacman -Sy --needed --noconfirm  gdb"
-    check_install_dependency "fzf" "sudo pacman -Sy --needed --noconfirm fzf"
-    check_install_dependency "scanmem" "sudo pacman -Sy --needed --noconfirm scanmem"
+need "gdb"
+need "fzf"
+need "scanmem"
 # Fzf alias
     alias fzf='fzf --color=16'
     alias fzf-tmux='fzf-tmux --color=16'

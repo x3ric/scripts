@@ -9,96 +9,73 @@ from argparse import ArgumentParser
 
 modes = {
     "aws-keys": {
-        "flags": "-HnriE",
         "pattern": r'([^A-Z0-9]|^)(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{12,}'
     },
     "base64": {
-        "flags": "-HnroE",
-        "pattern": r'([^A-Za-z0-9+/]|^)(eyJ|YTo|Tzo|PD[89]|aHR0cHM6L|aHR0cDo|rO0)[%a-zA-Z0-9+/]+={0,2}'
+        "pattern": r'([^A-Za-z0-9+/]|^)(eyJ|YTo|Tzo|PD[89]|aHR0cHM6L|aHR0cDo|rO0)[%a-zA-Z0-9+/]*={0,2}'
     },
     "cors": {
-        "flags": "-HnriE",
-        "pattern": r'Access-Control-Allow'
+        "pattern": r'Access-Control-Allow-'
     },
-    "debugpages": {
-        "flags": "-HnraiE",
-        "pattern": r'(Application-Trace|Routing Error|DEBUG\"? ?[=:] ?True|Caused by:|stack trace:|Microsoft .NET Framework|Traceback|[0-9]:in `|#!/us|WebApplicationException|java\.lang\.|phpinfo|swaggerUi|on line [0-9]|SQLSTATE)'
+    "debug-pages": {
+        "pattern": r'(Application-Trace|Routing Error|DEBUG\"? ?[=:] ?True|Caused by:|stack trace:|Microsoft \.NET Framework|Traceback|\d+:in `|#!/us|WebApplicationException|java\.lang\.|phpinfo|swaggerUi|on line \d+|SQLSTATE)'
     },
     "firebase": {
-        "flags": "-Hnri",
-        "pattern": r'firebaseio.com'
+        "pattern": r'firebaseio\.com'
     },
     "fw": {
-        "flags": "-HnriE",
-        "pattern": r'(django|laravel|symfony|graphite|grafana|X-Drupal-Cache|struts|code ?igniter|cake ?php|grails|elastic ?search|kibana|log ?stash|tomcat|jenkins|hudson|com.atlassian.jira|Apache Subversion|Chef Server|RabbitMQ Management|Mongo|Travis CI - Enterprise|BMC Remedy|artifactory)'
+        "pattern": r'(django|laravel|symfony|graphite|grafana|X-Drupal-Cache|struts|code ?igniter|cake ?php|grails|elastic ?search|kibana|log ?stash|tomcat|jenkins|hudson|com\.atlassian\.jira|Apache Subversion|Chef Server|RabbitMQ Management|Mongo|Travis CI - Enterprise|BMC Remedy|artifactory)'
     },
     "go-functions": {
-        "flags": "-HnriE",
         "pattern": r'func [a-z0-9_]+\('
     },
     "http-auth": {
-        "flags": "-hrioaE",
         "pattern": r'[a-z0-9_/\.:-]+@[a-z0-9-]+\.[a-z0-9.-]+'
     },
     "ip": {
-        "flags": "-HnroE",
         "pattern": r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
     },
     "json-sec": {
-        "flags": "-harioE",
-        "pattern": r'(\\?"|&quot;|%22)[a-z0-9_-]*(api[_-]?key|S3|aws_|secret|passw|auth)[a-z0-9_-]*(\\?"|&quot;|%22): ?(\\?"|&quot;|%22)[^"&]+(\\?"|&quot;|%22)'
+        "pattern": r'(?:"|&quot;|%22)[a-z0-9_-]*(api[_-]?key|S3|aws_|secret|passw|auth)[a-z0-9_-]*(?:"|&quot;|%22): ?(?:"|&quot;|%22)[^"&]+(?:"|&quot;|%22)'
     },
     "meg-headers": {
-        "flags": "-hroiE",
-        "pattern": r'^\u003c [a-z0-9_\-]+: .*'
+        "pattern": r'^< [a-z0-9_\-]+: .*'
     },
     "php-curl": {
-        "flags": "-HnrE",
         "pattern": r'CURLOPT_(HTTPHEADER|HEADER|COOKIE|RANGE|REFERER|USERAGENT|PROXYHEADER)'
     },
     "php-errors": {
-        "flags": "-HnriE",
-        "pattern": r'(php warning|php error|fatal error|uncaught exception|include_path|undefined index|undefined variable|\?php|<\?[^x]|stack trace\:|expects parameter [0-9]*|Debug Trace)'
+        "pattern": r'(php warning|php error|fatal error|uncaught exception|include_path|undefined index|undefined variable|\?php|<\?[^x]|stack trace:|expects parameter \d+|Debug Trace)'
     },
     "php-serialized": {
-        "flags": "-HnrE",
-        "pattern": r'(a:[0-9]+:{|O:[0-9]+:\"|s:[0-9]+:\")'
+        "pattern": r'(a:\d+:{|O:\d+:"|s:\d+":")'
     },
     "php-sinks": {
-        "flags": "-HnriE",
         "pattern": r'[^a-z0-9_](system|exec|popen|pcntl_exec|eval|create_function|unserialize|file_exists|md5_file|filemtime|filesize|assert) ?\('
     },
     "php-sources": {
-        "flags": "-HnrE",
         "pattern": r'(\$_(POST|GET|COOKIE|REQUEST|SERVER|FILES)|php://(input|stdin))'
     },
     "s3-bucket": {
-        "flags": "-hrioaE",
         "pattern": r'([a-z0-9.-]+\.s3\.amazonaws\.com|[a-z0-9.-]+\.s3-[a-z0-9-]+\.amazonaws\.com|[a-z0-9.-]+\.s3-website[.-](eu|ap|us|ca|sa|cn)|//s3\.amazonaws\.com/[a-z0-9._-]+|//s3-[a-z0-9-]+\.amazonaws\.com/[a-z0-9._-]+)'
     },
     "sec": {
-        "flags": "-hrioaE",
         "pattern": r'([a-z0-9.-]+\.s3\.amazonaws\.com|[a-z0-9.-]+\.s3-[a-z0-9-]+\.amazonaws\.com|[a-z0-9.-]+\.s3-website[.-](eu|ap|us|ca|sa|cn)|//s3\.amazonaws\.com/[a-z0-9._-]+|//s3-[a-z0-9-]+\.amazonaws\.com/[a-z0-9._-]+)'
     },
     "servers": {
-        "flags": "-hri",
         "pattern": r'server: '
     },
     "strings": {
-        "flags": "-hroiaE",
         "pattern": r'("[^"]+"|\'[^\']+\')'
     },
     "takeovers": {
-        "flags": "-HnriE",
         "pattern": r'(There is no app configured at that hostname|NoSuchBucket|No Such Account|You\'re Almost There|a GitHub Pages site here|There\'s nothing here|project not found|Your CNAME settings|InvalidBucketName|PermanentRedirect|The specified bucket does not exist|Repository not found|Sorry, We Couldn\'t Find That Page|The feed has not been found.|The thing you were looking for is no longer here, or never was|Please renew your subscription|There isn\'t a Github Pages site here.|We could not find what you\'re looking for.|No settings were found for this company:|No such app|is not a registered InCloud YouTrack|Unrecognized domain|project not found|This UserVoice subdomain is currently available!|Do you want to register|Help Center Closed)'
     },
     "upload-fields": {
-        "flags": "-HnriE",
-        "pattern": r'<input[^\>]+type=["\']?file["\']?>'
+        "pattern": r'<input[^>]+type=["\']?file["\']?'
     },
     "urls": {
-        "flags": "-oriahE",
-        "pattern": r'https?://[^"\'\> ]+'
+        "pattern": r'https?://[^"\'> ]+'
     },
     "truffle": {
         "flags": "-HnriE",

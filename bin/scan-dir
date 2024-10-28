@@ -1,5 +1,5 @@
 #!/bin/bash
-# Directory to preserve enumerated information
+# Directory for storing enumeration logs
 if [ -z "$1" ]; then
   echo "Usage: $0 <ip/domain/url>"
   exit 1
