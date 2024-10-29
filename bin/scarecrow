@@ -1,0 +1,53 @@
+#!/bin/bash
+# ScareCrow Installer
+function setup_openssl() {
+    cat <<EOF > PKGBUILD
+pkgname="osslsigncode"
+pkgver="2.8"
+pkgrel="2"
+pkgdesc="OpenSSL based Authenticode signing for PE/MSI/Java CAB files"
+arch=('i686' 'x86_64')
+url="https://github.com/mtrojnar/osslsigncode"
+license=('GPL')
+depends=('curl' 'openssl-1.1')
+makedepends=('cmake' 'perl' 'python')
+checkdepends=('libfaketime')
+source=("https://github.com/mtrojnar/\${pkgname}/archive/\${pkgver}.tar.gz")
+options=('!check')
+sha512sums=('SKIP')
+prepare() {
+  cmake -B build -S "\$srcdir/osslsigncode-\${pkgver}" \\
+    -DCMAKE_BUILD_TYPE=Release \\
+    -DCMAKE_INSTALL_PREFIX=/usr \\
+    -DOPENSSL_ROOT_DIR="/usr/include/openssl-1.1"
+}
+build() {
+  cmake --build build
+}
+check() {
+  cd build
+  ctest Release
+}
+package() {
+  cd build
+  python Testing/client_http.py || true 2> /dev/null
+  cd ..
+  DESTDIR="\$pkgdir" cmake --install build
+}
+EOF
+    makepkg -si --noconfirm
+    rm -rf PKGBUILD
+}
+
+if [[ ! -d $HOME/.local/opt/scarecrow ]]; then
+    yes '' | yay -Sy metasploit osslsigncode openssl mingw-w64
+    setup_openssl
+    cd "$HOME/.local/opt"
+    git clone https://github.com/optiv/ScareCrow
+    mv ScareCrow scarecrow
+    cd "$HOME/.local/opt/scarecrow"
+    go build ScareCrow.go
+fi
+
+cd "$HOME/.local/opt/scarecrow"
+./ScareCrow "$@"

