@@ -1,0 +1,4 @@
+#!/bin/bash
+# PwnDbg
+need pwndbg
+gdb -nx -ex "source /usr/share/pwndbg/gdbinit.py" "$@"

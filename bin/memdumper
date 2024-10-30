@@ -1,0 +1,94 @@
+#!/bin/env python3
+# Memory Dumper
+
+import sys
+import os
+import psutil
+import argparse
+from ctypes import CDLL, c_ulong
+
+def get_arguments():
+    parser = argparse.ArgumentParser(description="Memory Dumper.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-p", "--pid", type=int, help="Directly specify the process ID to dump memory from.")
+    parser.add_argument("-m", "--mode", choices=['dump', 'record'], default='dump', help="Choose 'dump' for a one-time stack dump or 'record' for continuous recording.")
+    parser.add_argument("-i", "--interval", type=int, default=10, help="Interval in seconds for recording.")
+    parser.add_argument("-d", "--duration", type=int, default=60, help="Duration in seconds for recording.")
+    return parser.parse_args()
+
+def require_root():
+    if os.geteuid() != 0:
+        print("This script requires root privileges. Re-running with sudo...")
+        os.execvp('sudo', ['sudo', 'python3'] + sys.argv)
+
+def setup_ptrace():
+    libc = CDLL("libc.so.6")
+    libc.ptrace.argtypes = [c_ulong, c_ulong, c_ulong, c_ulong]
+    libc.ptrace.restype = c_ulong
+    return libc.ptrace
+
+def process_selector():
+    processes = list(psutil.process_iter(['pid', 'name']))
+    for idx, proc in enumerate(processes):
+        print(f"{idx + 1}: PID={proc.info['pid']} - {proc.info['name']}")
+    while True:
+        input_str = input("Enter process number, PID, or name (or 'q' to quit): ").strip()
+        if input_str.lower() == 'q':
+            sys.exit("Exiting...")
+        if input_str.isdigit():
+            input_num = int(input_str)
+            if 1 <= input_num <= len(processes):
+                return processes[input_num - 1].info['pid']
+            else:
+                print("No process at that index. Please try again.")
+                continue
+        filtered_procs = [proc for proc in processes if str(proc.info['pid']) == input_str or input_str.lower() in proc.info['name'].lower()]
+        if filtered_procs:
+            if len(filtered_procs) == 1:
+                return filtered_procs[0].info['pid']
+            else:
+                print("Multiple processes found:")
+                for idx, proc in enumerate(filtered_procs):
+                    print(f"{idx + 1}: PID={proc.info['pid']} - {proc.info['name']}")
+                input_num = int(input("Select one: ").strip())
+                if 1 <= input_num <= len(filtered_procs):
+                    return filtered_procs[input_num - 1].info['pid']
+                print("Invalid selection.")
+                continue
+
+        print("No matching processes found. Please refine your input.")
+
+def read_stack_segments(pid):
+    with open(f"/proc/{pid}/maps", 'r') as file:
+        return [(int(m[0], 16), int(m[1], 16)) for m in
+                (line.split()[0].split('-') for line in file if 'stack' in line and 'r' in line.split()[1])]
+
+def dump_memory(pid, segments, filename):
+    with open(filename, "wb") as dump_file, open(f"/proc/{pid}/mem", "rb") as mem_file:
+        for start, end in segments:
+            mem_file.seek(start)
+            dump_file.write(mem_file.read(end - start))
+    print(f"Memory dump saved to {filename}")
+
+def main():
+    args = get_arguments()
+    require_root()
+    ptrace = setup_ptrace()
+    pid = args.pid if args.pid else process_selector()
+    ptrace(16, pid, 0, 0)
+    try:
+        segments = read_stack_segments(pid)
+        filename = f"stack-dump-{pid}.bin"
+        if args.mode == 'dump':
+            dump_memory(pid, segments, filename)
+        elif args.mode == 'record':
+            end_time = time.time() + args.duration
+            while time.time() < end_time:
+                print(f"Recording stack for PID {pid}...")
+                dump_memory(pid, segments, filename)
+                time.sleep(args.interval)
+            print("Finished recording.")
+    finally:
+        ptrace(17, pid, 0, 0)
+
+if __name__ == "__main__":
+    main()
