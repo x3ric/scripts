@@ -3,6 +3,8 @@
 packages=(
     bloodhound-python # blackarch
     pwndbg
+    python-r2pipe
+    python-rzpipe
     ropper
     openldap
     afl-utils
