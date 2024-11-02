@@ -1,0 +1,39 @@
+#!/bin/zsh
+# Chirpy Jekyll Template for HackTheBox Challenges
+if [[ $# -ne 3 ]]; then
+  echo "Usage: blog-htb-challenge <path> <challenge_name> <difficulty_level>"
+  echo "example: blog-htb \"$HOME/Documents/Projects/Hack/Ctf/Htb\" \"Soccer\" \"easy\""
+  exit 1
+fi
+dir="$1"
+current_date=$(date +'%Y-%m-%d')
+challenge_name=$2
+challenge_lower_name=$(echo "$challenge_name" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+challenge_level=$3
+tags="htb, challenge, writeup, linux"
+keywords="htb, challenge, $challenge_lower_name, hackthebox, writeup"
+file_name="${current_date}-HackTheBox-$(echo "$challenge_name" | tr ' ' '-').md"
+[[ ! -d "$dir" ]] && mkdir -p "$dir" && echo "[+] Directory created: $dir"
+template="Explore the basics of cybersecurity in the **$challenge_name Challenge** on Hack The Box. This **$challenge_level-level** Challenge introduces encryption reversal and file handling concepts in a clear and accessible way, perfect for beginners.
+
+\`\`\`
+\`\`\`"
+
+cat <<EOT > "$dir/$file_name"
+---
+title: HackTheBox $challenge_name Writeup
+date: $current_date 09:20:00 +0800
+categories: [challenge]
+tags: [$tags]
+keywords: [$keywords]
+---
+
+$template
+EOT
+if [[ -f "$dir/$file_name" ]]; then
+  echo "[+] File created: $dir/$file_name"
+  code "$dir/$file_name"
+else
+  echo "[-] Failed to create file."
+  exit 1
+fi

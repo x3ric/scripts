@@ -2,7 +2,7 @@
 # Chirpy Jekyll Template for TryHackMe
 if [[ $# -ne 5 ]]; then
   echo "Usage: blog-thm <path> <challenge_name> <difficulty_level> <server_ip> <hostname>"
-  echo "example: blog-thm \"$HOME/Documents/Projects/Hack/CTF/THM\" \"Soccer\" \"easy\" \"10.10.11.194\" \"soccer.htb\" \"soccer, soccer writeup, soccer ctf\""
+  echo "example: blog-thm \"$HOME/Documents/Projects/Hack/Ctf/Thm\" \"Soccer\" \"easy\" \"10.10.11.194\" \"soccer.htb\""
   exit 1
 fi
 dir="$1"
