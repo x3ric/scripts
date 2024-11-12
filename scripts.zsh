@@ -7,6 +7,7 @@ alias upload='curl bashupload.com -T "${@}"'
 alias burl='curl -x http://127.0.0.1:8080/ -k'
 alias adb-proxy-set="adb shell settings put global http_proxy $(ip a | grep -A 2 "enp4s0:" | grep -oP '(?<=inet\s)\d+(\.\d+){3}'):8080"
 alias adb-proxy-unset="adb shell settings put global http_proxy :0"
+
 # Adb utils
 alias adb-ip="adb shell \"ip addr | grep 'inet ' | sed -n '2p' | cut -d' ' -f6 | cut -d'/' -f1\""   
 alias adb-wireless='_adb-wireless() { adb tcpip 5454 && adb connect $a:5454 }; a=$(adb-ip); _adb-wireless'

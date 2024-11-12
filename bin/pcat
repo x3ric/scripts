@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+from scapy.all import *
+from datetime import datetime
+import json
+import logging
+import argparse
+
+class PcapAnalyzer:
+    def __init__(self, pcap_file: str):
+        self.pcap = rdpcap(pcap_file)
+        self.packet_summaries = []
+        self._analyze()
+
+    def _analyze(self):
+        for idx, pkt in enumerate(self.pcap, start=1):
+            try:
+                packet_summary = self._get_compact_packet_summary(pkt, idx)
+                self.packet_summaries.append(packet_summary)
+            except Exception as e:
+                logging.error(f"Failed to analyze packet #{idx}: {str(e)}")
+
+    def _get_compact_packet_summary(self, pkt, idx):
+        time_stamp = "{0:.6f}".format(pkt.time)
+        source = ""
+        destination = ""
+        protocol = ""
+        info = ""
+
+        if Ether in pkt:
+            ether = pkt[Ether]
+            source = ether.src
+            destination = ether.dst
+
+        if IP in pkt:
+            ip = pkt[IP]
+            source = ip.src
+            destination = ip.dst
+            protocol = "IP"
+        elif IPv6 in pkt:
+            ip6 = pkt[IPv6]
+            source = ip6.src
+            destination = ip6.dst
+            protocol = "IPv6"
+        else:
+            protocol = pkt.name
+
+        if TCP in pkt:
+            tcp = pkt[TCP]
+            source += f":{tcp.sport}"
+            destination += f":{tcp.dport}"
+            protocol = "TCP"
+            flags = tcp.sprintf("%TCP.flags%")
+            info = f"Flags={flags}"
+        elif UDP in pkt:
+            udp = pkt[UDP]
+            source += f":{udp.sport}"
+            destination += f":{udp.dport}"
+            protocol = "UDP"
+        elif ICMP in pkt:
+            icmp = pkt[ICMP]
+            protocol = "ICMP"
+            info = f"Type={icmp.type} Code={icmp.code}"
+        elif ARP in pkt:
+            arp = pkt[ARP]
+            protocol = "ARP"
+            source = arp.psrc
+            destination = arp.pdst
+            info = f"Operation={arp.op}"
+        elif TCP in pkt and pkt.haslayer(Raw):
+            raw_data = pkt[Raw].load
+            if len(raw_data) >= 2:
+                function_code = raw_data[1]
+                protocol = "Modbus"
+                info = f"Function Code={function_code}"
+        elif DNS in pkt:
+            dns = pkt[DNS]
+            protocol = "DNS"
+            info = f"Query Name={dns.qd.qname if dns.qd else 'N/A'}"
+        elif NTP in pkt:
+            ntp = pkt[NTP]
+            protocol = "NTP"
+            info = f"Version={ntp.version}"
+
+        packet_content = pkt.build().hex()
+
+        packet_summary = {
+            'No': idx,
+            'Time': time_stamp,
+            'Src': source,
+            'Dst': destination,
+            'Proto': protocol,
+            'Info': info,
+            'Content': packet_content
+        }
+
+        return packet_summary
+
+    def print_compact_packet_summaries(self):
+        for packet in self.packet_summaries:
+            line = f"\033[1;32m{packet['No']}\033[0m \033[1;34m{packet['Time']}\033[0m \033[1;33m{packet['Src']}\033[0m > \033[1;33m{packet['Dst']}\033[0m \033[1;31m{packet['Proto']}\033[0m \033[1;37m{packet['Info']}\033[0m\n{packet['Content']}"
+            print(line.strip())
+
+    def print_json(self):
+        print(json.dumps(self.packet_summaries, indent=2))
+
+    def save_json(self, filename: str):
+        with open(filename, 'w') as f:
+            json.dump(self.packet_summaries, f, indent=2)
+        print(f"\nPacket summaries saved to {filename}")
+
+def main():
+    parser = argparse.ArgumentParser(description='PCAP Analysis Tool')
+    parser.add_argument('pcap_file', help='Path to PCAP file')
+    parser.add_argument('-j', '--json', action='store_true', help='Print packet summaries as JSON')
+    parser.add_argument('-s', '--save', help='Save packet summaries to JSON file')
+    args = parser.parse_args()
+
+    try:
+        analyzer = PcapAnalyzer(args.pcap_file)
+
+        if args.json:
+            analyzer.print_json()
+        elif args.save:
+            analyzer.save_json(args.save)
+        else:
+            analyzer.print_compact_packet_summaries()
+
+    except Exception as e:
+        logging.error(f"Analysis failed: {str(e)}")
+        raise
+
+if __name__ == "__main__":
+    main()
