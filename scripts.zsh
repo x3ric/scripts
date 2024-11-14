@@ -2,6 +2,8 @@ export PATH="/home/e/.local/opt/Frida/venv/bin:$PATH"
 export PATH="/home/e/.local/zsh/Internal/scripts/bin:$PATH"
 
 # Utils
+alias hexedit="hexedit --color"
+alias hx="hexedit"
 alias linpeas="curl -L https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh -s --output $HOME/.local/www/unix/enum/linpeas.sh"
 alias upload='curl bashupload.com -T "${@}"'
 alias burl='curl -x http://127.0.0.1:8080/ -k'

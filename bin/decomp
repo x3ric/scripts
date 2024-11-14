@@ -1,0 +1,99 @@
+#!/bin/bash
+# Decompiler Explorer Cli
+
+retry_sleep=30
+retry_count=10
+write_error_txt=true
+requests_per_decompiler=3
+use_decompiler_name_map=true
+cpp_file_extension=cpp
+
+declare -A decompiler_name_map=(
+    [BinaryNinja]=binary-ninja
+    [Boomerang]=boomerang
+    [Ghidra]=ghidra
+    [Hex-Rays]=hex-rays
+    [RecStudio]=recstudio
+    [Reko]=reko
+    [Relyze]=relyze
+    [RetDec]=retdec
+    [Snowman]=snowman
+    #[Angr]=angr
+    #[Dewolf]=dewolf
+    #[Rev.ng]=rev.ng
+)
+
+file_path="$1"
+if [ -z "$file_path" ]; then echo "usage: $0 file_path"; exit 1; fi
+echo "Binary path: $file_path"
+file_size=$(stat -c%s "$file_path")
+echo "Binary size: $file_size"
+if ((file_size > 2097152)); then echo "Error: Binary too large."; exit 1; fi
+
+file_sha256=$(sha256sum "$file_path" | cut -d' ' -f1)
+echo "Binary hash: sha256:$file_sha256"
+binary_id_cache_path="$HOME/.cache/dogbolt/binary_id.txt"
+result_hash_cache_path="$HOME/.cache/dogbolt/result_hash.txt"
+
+binary_id=""
+if [ -e "$binary_id_cache_path" ]; then
+    binary_id=$(grep "^sha256:$file_sha256 " "$binary_id_cache_path" | cut -d' ' -f2)
+fi
+
+if [ -z "$binary_id" ]; then
+    echo "Uploading binary..."
+    binary_id=$(curl -s -X POST --form "file=@$file_path" https://dogbolt.org/api/binaries/ | jq -r .id)
+    mkdir -p "$(dirname "$binary_id_cache_path")"
+    echo "sha256:$file_sha256 $binary_id" >> "$binary_id_cache_path"
+fi
+
+echo "Binary ID: $binary_id"
+echo "Fetching decompiler names..."
+decompilers_json=$(curl -s https://dogbolt.org/ | grep -F '<script id="decompilers_json" type="application/json">' | sed -E 's|^.*<script[^>]+>(.*)</script>.*|\1|')
+decompilers_names=$(echo "$decompilers_json" | jq -r 'keys | join("\n")')
+decompilers_count=$(echo "$decompilers_names" | wc -l)
+echo "Decompiler names: $decompilers_names"
+
+declare -A request_count_by_decompiler_key
+done_decompiler_keys=""
+
+for ((retry_step=0; retry_step<retry_count; retry_step++)); do
+    echo "Fetching results..."
+    status_json=$(curl -s "https://dogbolt.org/api/binaries/$binary_id/decompilations/?completed=true")
+    count=$(echo "$status_json" | jq -r .count)
+    for ((result_id=0; result_id<count; result_id++)); do
+        result_json=$(echo "$status_json" | jq -r ".results[$result_id]")
+        decompiler_name=$(echo "$result_json" | jq -r .decompiler.name)
+        decompiler_version=$(echo "$result_json" | jq -r .decompiler.version)
+        decompiler_key="$decompiler_name-$decompiler_version"
+        if [[ " $done_decompiler_keys " =~ " $decompiler_key " ]]; then continue; fi
+        output_extension=${cpp_file_extension[$decompiler_name]:-c}
+        if $use_decompiler_name_map; then
+            new_decompiler_name=${decompiler_name_map[$decompiler_name]}
+            decompiler_name=${new_decompiler_name:-$decompiler_name}
+        fi
+        output_path="$(dirname "$file_path")/src/$decompiler_name-$decompiler_version"
+        output_file="$(basename "$file_path" | sed -E 's/\.(exe|dll|o|so)$//').$output_extension"
+        mkdir -p "$output_path"
+        if [[ "$error" == "Exceeded time limit" ]]; then
+            ((request_count_by_decompiler_key[$decompiler_key]++))
+            [[ ${request_count_by_decompiler_key[$decompiler_key]} -ge $requests_per_decompiler ]] && continue
+            echo "Retrying $decompiler_key..."
+            curl -s -X POST "https://dogbolt.org/api/binaries/$binary_id/decompilations/$decompilation_id/rerun/"
+        else
+            wget -q "$(echo "$result_json" | jq -r .download_url)" -O "$output_path/file.gz"
+            gzip -d "$output_path/file.gz"
+            first_file=$(find $output_path -maxdepth 1 -type f -name '*' | head -n 1)
+            mv "$first_file" "$output_path/$output_file"
+            echo "Decompilation saved: $output_path/$output_file"
+            done_decompiler_keys+=" $decompiler_key"
+        fi
+    done
+    [[ $(echo "$done_decompiler_keys" | wc -w) -eq $decompilers_count ]] && break
+    echo "Fetched $(echo "$done_decompiler_keys" | wc -w) of $decompilers_count. Retrying in $retry_sleep..."
+    sleep $retry_sleep
+done
+
+if ((count != decompilers_count)); then
+    echo "Timeout after $((retry_count * retry_sleep)) seconds. Fetched $count of $decompilers_count results."
+fi

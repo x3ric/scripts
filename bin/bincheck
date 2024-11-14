@@ -1,0 +1,59 @@
+#!/bin/bash
+# Binary Analysis
+need checksec
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <binary>"
+    exit 1
+fi
+
+binary=$1
+
+NC='\033[0m'       
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+
+IFS=',' read -r -a attributes <<< "$(checksec --file="$binary" --extended --format=csv)"
+
+colorize() {
+    case "$1" in
+        *found*|*enabled*|*Yes*) echo -e "${GREEN}$1${NC}" ;;
+        *No*|*Disabled*) echo -e "${RED}$1${NC}" ;;
+        *) echo -e "${YELLOW}$1${NC}" ;;
+    esac                 
+}
+
+echo "$(colorize "${attributes[0]}") | $(colorize "${attributes[1]}") | $(colorize "${attributes[2]}")"
+echo "$(colorize "${attributes[3]}") | $(colorize "${attributes[4]}") | $(colorize "${attributes[5]}")"
+echo "SafeStack: $(colorize "${attributes[6]}"), RPATH: $(colorize "${attributes[7]}"), RUNPATH: $(colorize "${attributes[8]}")"
+echo "Symbols: $(colorize "${attributes[9]}"), Fortify Source: $(colorize "${attributes[10]}"), Fortified: $(colorize "${attributes[11]}"), Fortify-able: $(colorize "${attributes[12]}")"
+
+if [[ "${attributes[2]}" == *"No"* ]]; then
+    echo "NX is disabled, checking for ROP gadgets using ropper..."
+    if command -v ropper &> /dev/null; then
+        ropper -f "$binary" --search "ret"
+    else
+        echo "Ropper is not installed. Consider installing ropper to check for ROP gadgets."
+    fi
+fi
+
+rabin2 -z 
+
+#objdump -dCSltr $1
+#strings -eL $1
+#ropper -f $1
+#strings -eb $1
+#strace $1
+#ltrace $1
+#readelf -a $1
+
+
+xxd editor
+
+xxd -p main > main.hex
+
+xxd -r -p main.hex main.patched
+chmod +x ./main.patched
+
+
+
