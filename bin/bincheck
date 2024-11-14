@@ -1,6 +1,7 @@
 #!/bin/bash
 # Binary Analysis
 need checksec
+need radare2
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <binary>"
     exit 1
@@ -30,11 +31,8 @@ if [[ "${attributes[2]}" == *"No"* ]]; then
         echo "Ropper is not installed. Consider installing ropper to check for ROP gadgets."
     fi
 fi
-#rabin2 -z 
+rabin2 -z $binary
 #objdump -dCSltr $1
-#strings -eL $1
-#ropper -f $1
-#strings -eb $1
-#strace $1
-#ltrace $1
+#strings -eL $1; strings -eb $1
+#strace $1; ltrace $1
 #readelf -a $1
