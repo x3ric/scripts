@@ -31,8 +31,15 @@ if [[ "${attributes[2]}" == *"No"* ]]; then
         echo "Ropper is not installed. Consider installing ropper to check for ROP gadgets."
     fi
 fi
+if upx -l "$binary" &>/dev/null; then
+    echo "UPX-packed. Unpacking $binary..."
+    upx -d "$binary" &>/dev/null && echo "Successfully unpacked $binary." || echo "Failed to unpack $binary."
+else
+    echo "$binary is not UPX-packed."
+fi
 rabin2 -z $binary
 #objdump -dCSltr $1
 #strings -eL $1; strings -eb $1
 #strace $1; ltrace $1
 #readelf -a $1
+

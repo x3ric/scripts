@@ -18,10 +18,7 @@ declare -A decompiler_name_map=(
     [Relyze]=relyze
     [RetDec]=retdec
     [Snowman]=snowman
-    #[Angr]=angr
-    #[Dewolf]=dewolf
-    #[Rev.ng]=rev.ng
-)
+) # [Rev.ng]=rev.ng # [Dewolf]=dewolf # [Angr]=angr
 
 file_path="$1"
 if [ -z "$file_path" ]; then echo "usage: $0 file_path"; exit 1; fi
