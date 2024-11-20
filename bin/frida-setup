@@ -2,18 +2,20 @@
 # Frida Setup
 need android-apktool-bin
 need apk-tools
+need pipx
 need jq
 local_dir="$HOME/.local/opt/Frida"
-if [ ! -d "$local_dir" ]; then
-    mkdir -p "$local_dir"
-    cd "$local_dir"
-    pyenv
-    pip install frida-tools setuptools objection aapt2
-    echo -e "Add in path --> export PATH="$local_dir/venv/bin:\$PATH""
-else
-    cd "$local_dir"
-    pyenv
-fi
+#if [ ! -d "$local_dir" ]; then
+#    mkdir -p "$local_dir"
+#    cd "$local_dir"
+#    pyenv
+#    pip install frida-tools setuptools objection aapt2
+#    echo -e "Add in path --> export PATH="$local_dir/venv/bin:\$PATH""
+#else
+#    cd "$local_dir"
+#    pyenv
+#fi
+pipx install frida-tools
 version=$(curl -s https://api.github.com/repos/frida/frida/releases/latest | jq -r '.tag_name')
 architecture=$(adb shell getprop ro.product.cpu.abi | sed 's/-.*//')
 filename="frida-server-$version-android-$architecture"
