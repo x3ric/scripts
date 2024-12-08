@@ -12,6 +12,10 @@ packages=(
     net-tools
     bind
     tcpdump
+    rsactftool
+    sagemath
+    fcrackzip
+    foremost
     tcpflow
     macchanger
     nmap
@@ -20,6 +24,7 @@ packages=(
     onionshare
     arduino-cli
     arduino-ide
+    bind
     binwalk
     jless
     htmlq
