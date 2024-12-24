@@ -1,6 +1,16 @@
 #!/bin/bash
 # Install Pentest Tools
 packages=(
+    # niesh ones
+    nocashgba-debugger
+    pulseview
+    kicad
+    urh
+    qsstv
+    hdfview-bin
+    ipython
+    jupyterlab
+    saleae-logic2
     bloodhound-python # blackarch
     pwndbg
     python-r2pipe
