@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+# Serial Port Detective
+import argparse
+import serial
+import time
+import string
+import threading
+import re
+import logging
+import sys
+from typing import Dict, Optional, List, Tuple
+from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
+from rich.table import Table
+from rich.panel import Panel
+
+#TODO: add parity bits and other options to find more serial devices bauds and config
+
+console = Console()
+logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.StreamHandler(sys.stdout)])
+logger = logging.getLogger(__name__)
+
+class Config:
+    TIMEOUT = 1.0
+    MAX_BYTES = 8192
+    WAIT_TIME = 30
+    DELAY = 0.5
+    RETRIES = 3
+    BAUD_RATES = {9600, 19200, 38400, 57600, 115200}
+    ALL_RATES = {50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400, 4800, 9600, 14400, 19200, 28800, 38400, 57600, 76800, 115200, 230400, 460800, 576000, 921600}
+    ENCODINGS = ['ascii', 'utf-8', 'latin1', 'cp437']
+
+class CommandPatterns:
+    SIMPLE = [b'\r\n', b'?\r\n', b'help\r\n', b'?\n', b'\x03', b'\x04', b'ls\r\n', b'ver\r\n', b'version\r\n',
+              b'system\r\n', b'shell\r\n', b'menu\r\n', b'info\r\n', b'status\r\n', b'>\r\n', b'$\r\n', b'#\r\n', b'/\r\n',
+              b'quit\r\n', b'exit\r\n', b'\x1B[A', b'\x1B[B', b'\t']
+    AT = [b'AT\r\n', b'AT\r', b'+++', b'AT&F\r\n', b'ATI\r\n', b'AT+GMM\r\n', b'AT+GSN\r\n',
+          b'\x01', b'\x02', b'\x05']
+    ARBITRARY = [b'\x7E\xFF\x03\x00\xFF\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFE',
+                 b'\xFE\xFE\x68\x00\x00\x00\x00\x00\x68\x11\x04\x33\x33\x33\x33\x33\x33\x33\x33\x16',
+                 b'\x55\xAA\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00']
+
+class MatchPatterns:
+    DETECTIONS = {
+        r'(?:\$|>|#)\s*$': 'Shell',
+        r'^(\$|>|#|shell|console)': 'Shell',
+        r'(help|command|menu).*available': 'Menu',
+        r'(?i)(version|system|status)\s*:': 'System',
+        r'^AT': 'AT',
+        r'OK|ERROR': 'AT',
+        r'^\x02.{1,32}\x03': 'STX/ETX',
+        r'^\x7E.{2,256}\x7E': 'HDLC',
+        r'^\xFE\xFE.{16,}': 'DLT645',
+        r'^\x55\xAA': 'Sync'
+    }
+
+class ProtocolDetector:
+    def __init__(self, port: str, timeout: float, aggressive: bool, verbose: bool, shell_focus: bool):
+        self.port = port
+        self.timeout = timeout
+        self.aggressive = aggressive
+        self.verbose = verbose
+        self.shell_focus = shell_focus
+        self.responses = {}
+
+    def send_probe(self, serial_port, probe):
+        """Send a probe and capture the response."""
+        try:
+            serial_port.reset_input_buffer()
+            serial_port.reset_output_buffer()
+            start_time = time.time()
+            serial_port.write(probe)
+            time.sleep(self.timeout / 2)
+            response = bytearray()
+            while (time.time() - start_time) < self.timeout and len(response) < Config.MAX_BYTES:
+                if serial_port.in_waiting:
+                    response += serial_port.read(serial_port.in_waiting)
+            return response
+        except serial.SerialException as e:
+            if self.verbose:
+                logger.debug(f"Serial exception: {e}")
+            return None
+
+    def analyze_response(self, probe, response, baudrate):
+        """Analyze the response to determine the protocol and other details."""
+        for encoding in Config.ENCODINGS:
+            try:
+                decoded_response = response.decode(encoding, errors='replace')
+                start_time = time.time()
+                for pattern, protocol in MatchPatterns.DETECTIONS.items():
+                    if re.search(pattern, decoded_response):
+                        return Response(decoded_response, response, time.time() - start_time, probe, baudrate, mode=protocol, shell_detected='Shell' in protocol)
+            except UnicodeDecodeError:
+                continue
+        return None
+
+    def detect_protocols(self):
+        """Detect protocols by sending probes at various baud rates."""
+        results = {}
+        baud_rates = Config.ALL_RATES if self.aggressive else Config.BAUD_RATES
+        with Progress(SpinnerColumn(), TimeElapsedColumn(), console=console) as progress:
+            task = progress.add_task("[cyan]Scanning...", total=len(baud_rates))
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = []
+                for baud in baud_rates:
+                    future = executor.submit(self.test_baud_rate, baud)
+                    futures.append(future)
+                for future in as_completed(futures):
+                    progress.update(task, advance=1)
+                    baudrate, response_results = future.result()
+                    if response_results:
+                        results[baudrate] = response_results
+        return results
+
+    def test_baud_rate(self, baud):
+        """Test all probes at a specific baud rate."""
+        results = []
+        try:
+            with serial.Serial(self.port, baud, timeout=self.timeout) as ser:
+                probes = CommandPatterns.SIMPLE + CommandPatterns.AT + CommandPatterns.ARBITRARY if self.shell_focus else CommandPatterns.SIMPLE
+                for probe in probes:
+                    response = self.send_probe(ser, probe)
+                    if response:
+                        result = self.analyze_response(probe, response, baud)
+                        if result:
+                            results.append(result)
+        except serial.SerialException as e:
+            if self.verbose:
+                logger.debug(f"Error testing baud rate {baud}: {e}")
+        return baud, results
+
+    def show_results(self):
+        """Display the results in a formatted table."""
+        if not self.responses:
+            console.print("[yellow]No responses received.[/yellow]")
+            return
+        for baud, responses in sorted(self.responses.items()):
+            table = Table(title=f"Responses at {baud} baud", show_header=True, header_style="bold magenta")
+            table.add_column("Protocol", style="cyan")
+            table.add_column("Probe", style="green")
+            table.add_column("Response", style="yellow")
+            table.add_column("Time", justify="right")
+            for response in responses:
+                table.add_row(response.mode or "Unknown", response.probe.decode('ascii', 'replace'), response.data[:50] + ("..." if len(response.data) > 50 else ""), f"{response.elapsed:.2f}")
+            console.print(table)
+
+@dataclass
+class Response:
+    data: str
+    raw: bytes
+    elapsed: float
+    probe: bytes
+    baud: int
+    retries: int = 0
+    mode: Optional[str] = None
+    shell_detected: bool = False
+
+    def to_dict(self) -> dict:
+        return {
+            'baudrate': self.baud,
+            'probe_hex': self.probe.hex(),
+            'response_hex': self.raw.hex(),
+            'data': self.data,
+            'protocol': self.mode or 'Unknown',
+            'time': f"{self.elapsed:.2f}",
+            'retries': self.retries,
+            'shell': self.shell_detected
+        }
+
+def wait_for_device(port, timeout=Config.WAIT_TIME):
+    """Wait for the serial device to become ready."""
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        try:
+            with serial.Serial(port, timeout=1) as device:
+                return True
+        except (serial.SerialException, serial.SerialTimeoutException):
+            time.sleep(Config.DELAY)
+    return False
+
+def main():
+    parser = argparse.ArgumentParser(description="Protocol Detective")
+    parser.add_argument("port", help="Serial port")
+    parser.add_argument("-t", "--timeout", type=float, default=Config.TIMEOUT, help="Timeout for serial communication in seconds")
+    parser.add_argument("-a", "--aggressive", action="store_true", help="Use all baud rates for testing")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("-w", "--wait", action="store_true", help="Wait for device to become ready before testing")
+    parser.add_argument("-s", "--shell-focus", action="store_true", help="Focus on detecting shell access")
+    args = parser.parse_args()
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+    if args.wait and not wait_for_device(args.port):
+        console.print("[red]No device found.[/red]")
+        return 1
+    console.print(Panel.fit("[bold blue]Protocol Detective[/bold blue]\n" + f"[cyan]Port:[/cyan] {args.port}\n[cyan]Mode:[/cyan] " + ('Aggressive' if args.aggressive else 'Normal'), title="Config", border_style="blue"))
+    detector = ProtocolDetector(args.port, args.timeout, args.aggressive, args.verbose, args.shell_focus)
+    results = detector.detect_protocols()
+    detector.responses = results
+    detector.show_results()
+    console.print(Panel(f"[green]Complete[/green]\nBauds tested: {len(Config.ALL_RATES if args.aggressive else Config.BAUD_RATES)}\n" + f"Responsive: {len(results)}\nTotal: {sum(len(x) for x in results.values())}", title="Summary", border_style="green"))
+    return 0
+
+if __name__ == '__main__':
+    exit(main())
