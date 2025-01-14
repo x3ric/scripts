@@ -1,13 +1,22 @@
 #!/bin/bash
 # Install Pentest Tools
 packages=(
-    # niesh ones
+    visual-studio-code-bin
+    # Arm
+    arm-none-eabi-gdb
+    arm-none-eabi-gcc
+    # Arch64
+    aarch64-linux-gnu-gcc
+    aarch64-linux-gnu-glibc
+    aarch64-linux-gnu-binutils
+    # Specific
     nocashgba-debugger
     pulseview
     kicad
     urh
     qsstv
     hdfview-bin
+    readpe
     ipython
     jupyterlab
     saleae-logic2
