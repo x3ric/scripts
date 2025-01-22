@@ -16,6 +16,12 @@ file_name="${current_date}-HackTheBox-$(echo "$challenge_name" | tr ' ' '-').md"
 [[ ! -d "$dir" ]] && mkdir -p "$dir" && echo "[+] Directory created: $dir"
 template="Explore the basics of cybersecurity in the **$challenge_name Challenge** on Hack The Box. This **$challenge_level-level** Challenge introduces encryption reversal and file handling concepts in a clear and accessible way, perfect for beginners.
 
+<>
+
+### Description
+
+### Exploitation
+
 \`\`\`
 \`\`\`"
 
