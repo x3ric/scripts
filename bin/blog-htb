@@ -42,7 +42,7 @@ cat <<EOT > "$dir/$file_name"
 ---
 title: HackTheBox $challenge_name Writeup
 date: $current_date 09:20:00 +0800
-categories: [ctf]
+categories: [machine]
 tags: [$tags]
 keywords: [$keywords]
 ---
