@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Debug Symbols Util
+# Symbols Util
 import sys, os
 import struct
 import argparse
@@ -202,12 +202,7 @@ def main():
     parser.add_argument("-p", "--pattern", help="Filter symbols by substring")
     parser.add_argument("-s", "--symbol", help="Specify an exact symbol name to inspect")
     parser.add_argument("-v", "--value", help="New value to write to each matched symbol")
-    parser.add_argument(
-        "-t",
-        "--type",
-        default="byte",
-        help="Data type for reading/writing values (options: byte, bool, char, short, int, long, float, double). Default is 'byte'."
-    )
+    parser.add_argument("-t","--type",default="byte", help="Data type for reading/writing values (options: byte, bool, char, short, int, long, float, double). Default is 'byte'.")
     args = parser.parse_args()
     attach(args.program, pattern=args.pattern, specific_symbol=args.symbol, new_val=args.value, data_type=args.type)
 
