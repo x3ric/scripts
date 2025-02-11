@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+# Debug Symbols Util
+import sys, os
+import struct
+import argparse
+from ptrace import debugger
+from elftools.elf.elffile import ELFFile
+from typing import Dict
+
+def is_pie(program: str) -> bool:
+    try:
+        with open(program, 'rb') as f:
+            elf = ELFFile(f)
+            return elf.header['e_type'] == 'ET_DYN'
+    except Exception as e:
+        print(f"[-] Error determining PIE: {e}")
+        return False
+
+def get_debug_info(elf) -> Dict[str, int]:
+    debug_info = {}
+    if elf.has_dwarf_info():
+        dwarf = elf.get_dwarf_info()
+        for CU in dwarf.iter_CUs():
+            for DIE in CU.iter_DIEs():
+                try:
+                    if 'DW_AT_name' in DIE.attributes:
+                        name = DIE.attributes['DW_AT_name'].value.decode('utf-8', errors='ignore')
+                        if 'DW_AT_location' in DIE.attributes:
+                            loc_attr = DIE.attributes['DW_AT_location']
+                            loc = loc_attr.value
+                            if isinstance(loc, bytes) and len(loc) >= 2 and loc[0] == 0x03:
+                                addr = int.from_bytes(loc[1:], byteorder='little')
+                                debug_info[name] = addr
+                except Exception:
+                    continue
+    return debug_info
+
+def get_all_symbols(program: str) -> Dict[str, int]:
+    symbols = {}
+    try:
+        with open(program, 'rb') as f:
+            elf = ELFFile(f)
+            symbols.update(get_debug_info(elf))
+            for section_name in ['.symtab', '.dynsym']:
+                section = elf.get_section_by_name(section_name)
+                if section:
+                    for sym in section.iter_symbols():
+                        if sym.name and sym.entry.st_value != 0:
+                            symbols[sym.name] = sym.entry.st_value
+    except Exception as e:
+        print(f"[-] Error reading symbols: {e}")
+    return symbols
+
+def get_base_address(pid: int, program: str) -> int:
+    try:
+        real_program = os.path.realpath(program)
+        with open(f"/proc/{pid}/maps", "r") as maps_file:
+            for line in maps_file:
+                parts = line.strip().split()
+                if len(parts) >= 6:
+                    addr_range, perms, offset, dev, inode, pathname = parts[:6]
+                    try:
+                        if os.path.realpath(pathname) == real_program:
+                            base_addr = int(addr_range.split('-')[0], 16)
+                            return base_addr
+                    except Exception:
+                        continue
+    except Exception as e:
+        print(f"[-] Error reading /proc/{pid}/maps: {e}")
+    return 0
+
+def get_type_size(data_type: str) -> int:
+    if data_type in ("bool", "boolean", "char", "byte"):
+        return 1
+    elif data_type == "short":
+        return 2
+    elif data_type in ("int", "float"):
+        return 4
+    elif data_type in ("long", "double"):
+        return 8
+    else:
+        return 1
+
+def parse_value(data: bytes, data_type: str) -> str:
+    try:
+        if data_type in ("bool", "boolean"):
+            val = data[0]
+            return "True" if val != 0 else "False"
+        elif data_type == "char":
+            return data.decode('utf-8', errors='replace')
+        elif data_type == "short":
+            if len(data) < 2: 
+                return "N/A"
+            val = struct.unpack("<h", data[:2])[0]
+            return str(val)
+        elif data_type == "int":
+            if len(data) < 4: 
+                return "N/A"
+            val = struct.unpack("<i", data[:4])[0]
+            return str(val)
+        elif data_type == "long":
+            if len(data) < 8: 
+                return "N/A"
+            val = struct.unpack("<q", data[:8])[0]
+            return str(val)
+        elif data_type == "float":
+            if len(data) < 4: 
+                return "N/A"
+            val = struct.unpack("<f", data[:4])[0]
+            return str(val)
+        elif data_type == "double":
+            if len(data) < 8: 
+                return "N/A"
+            val = struct.unpack("<d", data[:8])[0]
+            return str(val)
+        elif data_type in ("byte", None):
+            return str(data[0])
+        else:
+            return data.hex()
+    except Exception as e:
+        return f"Error: {e}"
+
+def pack_value(new_val: str, data_type: str) -> bytes:
+    try:
+        if data_type in ("bool", "boolean", "byte"):
+            nval = int(new_val) & 0xFF
+            return bytes([nval])
+        elif data_type == "char":
+            return new_val[0].encode('utf-8')
+        elif data_type == "short":
+            return struct.pack("<h", int(new_val))
+        elif data_type == "int":
+            return struct.pack("<i", int(new_val))
+        elif data_type == "long":
+            return struct.pack("<q", int(new_val))
+        elif data_type == "float":
+            return struct.pack("<f", float(new_val))
+        elif data_type == "double":
+            return struct.pack("<d", float(new_val))
+        else:
+            nval = int(new_val) & 0xFF
+            return bytes([nval])
+    except Exception as e:
+        print(f"[-] Error packing value '{new_val}' as {data_type}: {e}")
+        raise
+
+def attach(program: str, pattern: str = None, specific_symbol: str = None, new_val: str = None, data_type: str = 'byte') -> None:
+    try:
+        pid_str = os.popen(f'pidof {program}').read().strip()
+        if not pid_str:
+            return print("[-] Process not found")
+        pid = int(pid_str.split()[0])
+        dbg = debugger.PtraceDebugger()
+        proc = dbg.addProcess(pid, False)
+        symbols = get_all_symbols(program)
+        base = get_base_address(pid, program) if is_pie(program) else 0
+        size = get_type_size(data_type)
+        header = f"{'Status':<6} {'Symbol':<70} {'Address':<16} {'Raw':<20} {'Parsed':<20}"
+        print(header)
+        print("-" * len(header))
+        if specific_symbol:
+            matches = {name: addr for name, addr in symbols.items() if name == specific_symbol}
+            if not matches:
+                print(f"Symbol '{specific_symbol}' not found. Check the available symbols.")
+        elif pattern:
+            matches = {name: addr for name, addr in symbols.items() if pattern.lower() in name.lower()}
+            if not matches:
+                print(f"No matches for pattern '{pattern}'. Available symbols (first 10):")
+                for name in sorted(symbols)[:10]:
+                    print(f"  - {name}")
+                if len(symbols) > 10:
+                    print(f"... and {len(symbols)-10} more")
+        else:
+            matches = symbols
+        for name, addr in sorted(matches.items()):
+            full_addr = base + addr
+            try:
+                old_data = proc.readBytes(full_addr, size)
+                old_raw = old_data.hex()
+                old_parsed = parse_value(old_data, data_type)
+                status = "[+]"
+                result = f"{old_raw} / {old_parsed}"
+                if new_val is not None:
+                    new_bytes = pack_value(new_val, data_type)
+                    proc.writeBytes(full_addr, new_bytes)
+                    new_data = proc.readBytes(full_addr, size)
+                    new_raw = new_data.hex()
+                    new_parsed = parse_value(new_data, data_type)
+                    status = "[!]"
+                    result = f"{old_raw} -> {new_raw} / {old_parsed} -> {new_parsed}"
+                print(f"{status:<6} {name:<70} {hex(full_addr):<16} {result:<20}")
+            except Exception as e:
+                print(f"{'[-]':<6} {name:<70} {hex(full_addr):<16} (unreadable: {e})")
+        proc.detach()
+        dbg.quit()
+    except Exception as e:
+        print(f"[-] Error: {e}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Attach to a process and inspect/modify symbol values with type-aware parsing.")
+    parser.add_argument("program", help="Path or name of the target executable")
+    parser.add_argument("-p", "--pattern", help="Filter symbols by substring")
+    parser.add_argument("-s", "--symbol", help="Specify an exact symbol name to inspect")
+    parser.add_argument("-v", "--value", help="New value to write to each matched symbol")
+    parser.add_argument(
+        "-t",
+        "--type",
+        default="byte",
+        help="Data type for reading/writing values (options: byte, bool, char, short, int, long, float, double). Default is 'byte'."
+    )
+    args = parser.parse_args()
+    attach(args.program, pattern=args.pattern, specific_symbol=args.symbol, new_val=args.value, data_type=args.type)
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        os.execvp("sudo", ["sudo", sys.executable] + sys.argv)
+    else:
+        main()
