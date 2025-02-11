@@ -1,5 +1,5 @@
-export PATH="~/.local/opt/Frida/venv/bin:$PATH"
-export PATH="~/.local/zsh/Internal/scripts/bin:$PATH"
+export PATH="$HOME/.local/opt/Frida/venv/bin:$PATH"
+export PATH="$HOME/.local/zsh/Internal/scripts/bin:$PATH"
 
 # Utils
 alias hexedit="hexedit --color"
