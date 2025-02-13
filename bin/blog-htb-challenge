@@ -27,8 +27,8 @@ template="Explore the basics of cybersecurity in the **$challenge_name Challenge
 
 cat <<EOT > "$dir/$file_name"
 ---
-title: HackTheBox $challenge_name Writeup
-date: $current_date 09:20:00 +0800
+title: HackTheBox $challenge_name Challenge
+date: $current_date 00:20:00 +0800
 categories: [challenge]
 tags: [$tags]
 keywords: [$keywords]
