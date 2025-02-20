@@ -1,6 +1,6 @@
 #!/bin/bash
 # Kali Wm Qemu Launcher
-IMG_PATH="~/Documents/Wm/kali-linux-2024.4-qemu-amd64.qcow2" # https://cdimage.kali.org/kali-2024.4/kali-linux-2024.4-qemu-amd64.7z
+IMG_PATH="$HOME/Documents/Wm/kali-linux-2024.4-qemu-amd64.qcow2" # https://cdimage.kali.org/kali-2024.4/kali-linux-2024.4-qemu-amd64.7z
 RAM="16G"
 CPU_CORES="8"
 qemu-system-x86_64 \
