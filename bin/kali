@@ -1,8 +1,11 @@
 #!/bin/bash
 # Kali Wm Qemu Launcher
+need virt-viewer
+need qemu-full
 IMG_PATH="$HOME/Documents/Wm/kali-linux-2024.4-qemu-amd64.qcow2" # https://cdimage.kali.org/kali-2024.4/kali-linux-2024.4-qemu-amd64.7z
 RAM="16G"
 CPU_CORES="8"
+echo "Connect to spice with remote-viewer spice://127.0.0.1:5900"
 qemu-system-x86_64 \
     -enable-kvm \
     -cpu host \
@@ -10,6 +13,8 @@ qemu-system-x86_64 \
     -smp $CPU_CORES \
     -drive file="$IMG_PATH",format=qcow2 \
     -vga virtio \
-    -net nic -net user \
-    -boot c \
+    -spice port=5900,addr=127.0.0.1,disable-ticketing=on \
+    -device virtio-serial-pci \
+    -chardev spicevmc,id=spicechannel0,name=vdagent \
+    -device virtserialport,chardev=spicechannel0,name=com.redhat.spice.0 \
     -name "Kali-Linux-2024.4"
