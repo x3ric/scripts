@@ -32,3 +32,32 @@ mkcd() { # make directory and cd into it
     fi
     cd "$(realpath "$1")" || { echo "Failed to change directory"; return 1; }
 }
+
+memstr() { # strings in a pid mem
+    if [ -z "$1" ]; then
+        echo "Usage: memstr <exe>"
+        return 1
+    fi
+    local exe_name=$1
+    local pid=$(pidof $exe_name | cut -d ' ' -f1)
+    if [ -z "$pid" ]; then
+        echo "Error: Process '$exe_name' not found"
+        return 1
+    fi
+    local maps_file="/proc/$pid/maps"
+    local mem_file="/proc/$pid/mem"
+    if [ ! -r "$maps_file" ] || [ ! -r "$mem_file" ]; then
+        echo "Error: Cannot access process memory files"
+        return 1
+    fi
+    while IFS='-' read -r seg_start rest; do
+        if [[ $rest =~ ^[0-9a-f]+[[:space:]]+r ]]; then
+            local seg_end="${rest%% *}"
+            local seg_start_dec=$(printf "%d" 0x$seg_start)
+            local seg_end_dec=$(printf "%d" 0x$seg_end)
+            local seg_size=$(($seg_end_dec - $seg_start_dec))
+            sudo dd if=$mem_file bs=1 skip=$seg_start_dec count=$seg_size 2>/dev/null | strings
+        fi
+    done < "$maps_file"
+}
+

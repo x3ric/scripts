@@ -1,100 +1,129 @@
 #!/usr/bin/env python3
-# Pcap Analysis Tool
-import argparse
-import json
-import logging
+import argparse, json, sys, os
+from collections import defaultdict
+from datetime import datetime
 from scapy.all import *
+from scapy.layers.inet import IP, TCP, UDP, ICMP
+from scapy.layers.inet6 import IPv6
 from scapy.utils import PcapReader
+import shutil
+import os
+
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    GRAY = '\033[90m'
+    CYAN = '\033[96m'
 
 class PcapAnalyzer:
-    def __init__(self, pcap_file: str, show_tcp_ascii: bool, show_raw: bool):
-        self.pcap_file = pcap_file
-        self.show_tcp_ascii = show_tcp_ascii
-        self.show_raw = show_raw
-        self.packet_summaries = []
-        self.tcp_streams = {}
-        self._analyze()
+    def __init__(self, pcap_file: str, options: dict):
+        self.pcap_file, self.options = pcap_file, options
+        self.packet_summaries, self.tcp_streams = [], defaultdict(list)
+        self.file_size = os.path.getsize(pcap_file)
 
-    def _analyze(self):
+    def analyze(self):
         with PcapReader(self.pcap_file) as pcap:
-            for pkt in pcap:
-                if TCP in pkt:
-                    self._handle_tcp_packet(pkt)
-                self._analyze_packet(pkt)
+            for i, pkt in enumerate(pcap, 1):
+                self._process_packet(pkt, i)
 
-    def _analyze_packet(self, pkt):
-        idx = pkt.sniffed_on
-        time_stamp = "{0:.6f}".format(pkt.time)
-        source = destination = protocol = info = ""
-
-        if IP in pkt or IPv6 in pkt:
-            ip_layer = pkt.getlayer(IP) or pkt.getlayer(IPv6)
-            source = ip_layer.src
-            destination = ip_layer.dst
-            protocol = ip_layer.name
-
+    def _process_packet(self, pkt, num):
+        summary = {'No': num, 'Time': f"{pkt.time:.6f}", 'Proto': self._get_proto(pkt), 'Len': len(pkt)}
+        if IP in pkt: summary.update({'Src': pkt[IP].src, 'Dst': pkt[IP].dst})
+        elif IPv6 in pkt: summary.update({'Src': pkt[IPv6].src, 'Dst': pkt[IPv6].dst})
         if TCP in pkt:
             tcp = pkt[TCP]
-            source += f":{tcp.sport}"
-            destination += f":{tcp.dport}"
-            protocol = "TCP"
-            flags = tcp.sprintf("%TCP.flags%")
-            info = f"Flags={flags}"
+            summary.update({'Src Port': tcp.sport, 'Dst Port': tcp.dport, 'Flags': tcp.sprintf('%TCP.flags%')})
+            if Raw in pkt and self.options.get('ascii'):
+                summary['Ascii'] = ''.join(chr(b) if 32 <= b <= 126 else f'\\x{b:02x}' for b in pkt[Raw].load)
+            if Raw in pkt and self.options.get('raw'):
+                summary['Raw'] = pkt[Raw].load.hex()
+        self.packet_summaries.append(summary)
 
-        elif UDP in pkt:
-            udp = pkt[UDP]
-            source += f":{udp.sport}"
-            destination += f":{udp.dport}"
-            protocol = "UDP"
-        
-        elif ICMP in pkt:
-            icmp = pkt[ICMP]
-            protocol = "ICMP"
-            info = f"Type={icmp.type} Code={icmp.code}"
+    def _get_proto(self, pkt):
+        return "TCP" if TCP in pkt else "UDP" if UDP in pkt else "ICMP" if ICMP in pkt else pkt.name
 
-        packet_summary = {'No': idx, 'Time': time_stamp, 'Src': source, 'Dst': destination, 'Proto': protocol, 'Info': info}
-        self.packet_summaries.append(packet_summary)
+    def get_summary(self):
+        protos, ports, ips = defaultdict(int), defaultdict(int), defaultdict(int)
+        for pkt in self.packet_summaries:
+            protos[pkt['Proto']] += 1
+            if 'Src Port' in pkt: ports[pkt['Src Port']] += 1
+            if 'Dst Port' in pkt: ports[pkt['Dst Port']] += 1
+            if 'Src' in pkt: ips[pkt['Src']] += 1
+            if 'Dst' in pkt: ips[pkt['Dst']] += 1
+        return {'total': len(self.packet_summaries), 'protos': dict(protos), 'ports': dict(ports), 'ips': dict(ips)}
 
-    def _handle_tcp_packet(self, pkt):
-        if self.show_tcp_ascii and Raw in pkt:
-            tcp = pkt[TCP]
-            data = tcp.load.decode(errors='ignore').strip()
-            if data:
-                print(f"TCP Stream Data: {data}")
+    def print_summary(self):
+        s = self.get_summary()
+        print(f"Total Packets: {Colors.BOLD}{s['total']}{Colors.ENDC}")
+        print(f"\n{Colors.UNDERLINE}Top Protocols:{Colors.ENDC}")
+        for p, c in sorted(s['protos'].items(), key=lambda x: -x[1])[:5]:
+            bar = '█' * int(c / s['total'] * 30)
+            print(f" {p:<6} {c:>5} {Colors.CYAN}{bar:<30}{Colors.ENDC} {(c/s['total']*100):5.1f}%")
+        print(f"\n{Colors.UNDERLINE}Top Ports:{Colors.ENDC}")
+        for p, c in sorted(s['ports'].items(), key=lambda x: -x[1])[:5]:
+            bar = '█' * int(c / s['total'] * 30)
+            print(f" Port {p:<5} {c:>5} {Colors.YELLOW}{bar:<30}{Colors.ENDC} {(c/s['total']*100):5.1f}%")
+        print(f"\n{Colors.UNDERLINE}Top IP Addresses:{Colors.ENDC}")
+        for ip, c in sorted(s['ips'].items(), key=lambda x: -x[1])[:5]:
+            bar = '█' * int(c / s['total'] * 30)
+            print(f" {ip:<15} {c:>5} {Colors.GREEN}{bar:<30}{Colors.ENDC} {(c/s['total']*100):5.1f}%")
 
-    def print_packet_summaries(self):
-        for packet in self.packet_summaries:
-            if self.show_raw:
-                raw_data = packet['Raw'] if 'Raw' in packet else 'No raw data'
-                print(f"{packet['No']} {packet['Time']} {packet['Src']} > {packet['Dst']} {packet['Proto']} {packet['Info']} Raw: {raw_data}")
-            else:
-                print(f"{packet['No']} {packet['Time']} {packet['Src']} > {packet['Dst']} {packet['Proto']} {packet['Info']}")
-
-    def save_json(self, filename: str):
-        with open(filename, 'w') as f:
-            json.dump(self.packet_summaries, f, indent=2)
-        print(f"\nPacket summaries saved to {filename}")
+    def print_packets(self):
+        try:
+            term_width, _ = shutil.get_terminal_size()
+        except:
+            term_width = 100
+        no_width = 4
+        time_width = 15
+        proto_width = 6
+        flags_width = 8
+        len_width = 5
+        remaining_width = term_width - (no_width + time_width + proto_width + flags_width + len_width + 10)
+        addr_width = max(10, remaining_width // 2)
+        print(f"\n{Colors.BOLD}{'#':>{no_width}} {'Time':>{time_width}} {'Proto':^{proto_width}} "
+            f"{'Source':^{addr_width}} {'Destination':^{addr_width}} {'Flags':^{flags_width}} "
+            f"{'Len':>{len_width}}{Colors.ENDC}")
+        print(f"{Colors.GRAY}{'-' * term_width}{Colors.ENDC}")
+        for pkt in self.packet_summaries:
+            src = f"{pkt.get('Src','')}:{pkt.get('Src Port','')}" if 'Src Port' in pkt else pkt.get('Src','')
+            dst = f"{pkt.get('Dst','')}:{pkt.get('Dst Port','')}" if 'Dst Port' in pkt else pkt.get('Dst','')
+            if len(src) > addr_width:
+                src = src[:addr_width-3] + "..."
+            if len(dst) > addr_width:
+                dst = dst[:addr_width-3] + "..."
+            proto_color = Colors.GREEN if pkt['Proto']=='TCP' else Colors.BLUE if pkt['Proto']=='UDP' else Colors.YELLOW
+            print(f"{pkt['No']:>{no_width}} {pkt['Time']:>{time_width}} {proto_color}{pkt['Proto']:^{proto_width}}{Colors.ENDC} "
+                f"{src:^{addr_width}} {dst:^{addr_width}} {pkt.get('Flags',''):^{flags_width}} {pkt['Len']:>{len_width}}")
+            if 'Ascii' in pkt and term_width > 40:
+                max_ascii = term_width - 10
+                ascii_data = pkt['Ascii'][:max_ascii]
+                print(f" {Colors.GRAY}Ascii: {ascii_data}{Colors.ENDC}")
+            if 'Raw' in pkt and term_width > 40:
+                max_raw = term_width - 10
+                raw_data = pkt['Raw'][:max_raw]
+                print(f" {Colors.GRAY}Raw: {raw_data}{Colors.ENDC}")
 
 def main():
-    parser = argparse.ArgumentParser(description='PCAP Analysis Tool')
-    parser.add_argument('pcap_file', help='Path to PCAP file')
-    parser.add_argument('-a', '--ascii', action='store_true', help='Show ASCII output for TCP streams')
-    parser.add_argument('-r', '--raw', action='store_true', help='Show raw data in packet summaries')
-    parser.add_argument('-j', '--json', action='store_true', help='Print packet summaries as JSON')
-    parser.add_argument('-s', '--save', help='Save packet summaries to JSON file')
-    args = parser.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument('pcap_file')
+    p.add_argument('-a','--ascii', action='store_true', help='Show Ascii content')
+    p.add_argument('-r','--raw', action='store_true', help='Show Raw content')
+    p.add_argument('-j','--json', action='store_true', help='Output JSON for jq piping')
+    p.add_argument('-s','--summary', action='store_true', help='Show summary only')
+    args = p.parse_args()
+    analyzer = PcapAnalyzer(args.pcap_file, vars(args))
+    analyzer.analyze()
+    if args.json:
+        print(json.dumps({'summary': analyzer.get_summary(), 'packets': analyzer.packet_summaries}, indent=2))
+    elif args.summary:
+        analyzer.print_summary()
+    else:
+        analyzer.print_packets()
 
-    try:
-        analyzer = PcapAnalyzer(args.pcap_file, args.ascii, args.raw)
-        if args.json:
-            print(json.dumps(analyzer.packet_summaries, indent=2))
-        elif args.save:
-            analyzer.save_json(args.save)
-        else:
-            analyzer.print_packet_summaries()
-
-    except Exception as e:
-        logging.error(f"Analysis failed: {str(e)}")
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__': main()

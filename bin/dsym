@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Symbols Util
+# Binary Symbols Util Dbg
 import sys, os
 import struct
 import argparse
@@ -198,7 +198,7 @@ def attach(program: str, pattern: str = None, specific_symbol: str = None, new_v
 
 def main():
     parser = argparse.ArgumentParser(description="Attach to a process and inspect/modify symbol values with type-aware parsing.")
-    parser.add_argument("program", help="Path or name of the target executable")
+    parser.add_argument("program", help="Name of the target executable to attach to the pid")
     parser.add_argument("-p", "--pattern", help="Filter symbols by substring")
     parser.add_argument("-s", "--symbol", help="Specify an exact symbol name to inspect")
     parser.add_argument("-v", "--value", help="New value to write to each matched symbol")

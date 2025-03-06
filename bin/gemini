@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+# Gemini Cli
+import os
+import sys
+import json
+import requests
+import readline
+import subprocess
+from rich.theme import Theme
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.console import Console
+from rich.markdown import Markdown
+
+models = [
+    "gemini-1.0-pro",      #0 
+    "gemini-1.5-pro",      #1 
+    "gemini-1.5-flash",    #2  
+    "gemini-1.5-flash-8b", #3
+]
+
+console = Console()
+cache_dir = os.path.expanduser('~/.cache')
+api_key = os.getenv('personal_gemini_token')
+history_file = os.path.join(cache_dir, 'gemini.history')
+gemini_model = f"https://generativelanguage.googleapis.com/v1beta/models/{models[2]}-latest:generateContent"
+
+if not api_key:
+    console.print("[error]Error: 'personal_gemini_token' environment variable is not set.\n Get the api in https://aistudio.google.com/app/apikey[/error]")
+    sys.exit(1)
+if not os.path.exists(cache_dir):
+    os.makedirs(cache_dir)
+if os.path.exists(history_file):
+    try:
+        with open(history_file, 'r') as f:
+            history = json.load(f)
+    except json.JSONDecodeError:
+        console.print("[error]Error reading history file, resetting history.[/error]")
+        history = []
+else:
+    history = []
+for entry in history:
+    readline.add_history(entry['command'])
+
+readline.set_history_length(100)
+readline.parse_and_bind("tab: complete")
+
+memory_list = []
+
+def gemini_request(user_input):
+    global memory_list
+    memory_list.append(f"Prompt #{len(memory_list) + 1}: {user_input}")
+    if len(memory_list) > 10:
+        memory_list.pop(0)
+    memory_string = "\n".join([f"{i+1} {entry}" for i, entry in enumerate(memory_list)])
+    pre_prompt = f"{memory_string}\nNew input: {user_input}"
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": f"PromtMemory: {pre_prompt}"
+                    }
+                ]
+            }
+        ]
+    }
+    try:
+        response = requests.post(f"{gemini_model}?key={api_key}", headers={'Content-Type': 'application/json'}, json=payload)
+        response.raise_for_status()
+        api_response = response.json().get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text')
+        memory_list.append(f"Model response: {api_response}")
+        if len(memory_list) > 10:
+            memory_list.pop(0)
+        return api_response
+    except requests.exceptions.RequestException as e:
+        console.print(f"[error]Error: {e}[/error]")
+        return None
+
+def execute_bash_command(command):
+    try:
+        output = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
+        return output
+    except subprocess.CalledProcessError as e:
+        return f"[error]Command failed with error:\n{e.output}[/error]"
+
+def render_response(response):
+    console.print(Markdown(response,code_theme="ansi_dark"))
+
+def save_history():
+    with open(history_file, 'w') as f:
+        json.dump(history, f, indent=2)
+
+def show_history():
+    console.print("\n[bold cyan]Command History:[/bold cyan]\n")
+    if not history:
+        console.print("[bold yellow]No history available.[/bold yellow]")
+        return
+    for index, entry in enumerate(history):
+        console.print(f"[bold cyan]Command #{index + 1}:[/bold cyan] {entry['command']}")
+        render_response(entry['response'])
+        console.print("\n")
+
+def show_help():
+    console.print("[bold cyan]Available Commands:[/bold cyan]")
+    console.print("[yellow]1. exit / quit:[/yellow] Close the application.")
+    console.print("[yellow]2. history:[/yellow] Show the command history.")
+    console.print("[yellow]3. help:[/yellow] Show this help message.")
+    console.print("[yellow]4. bash [command]:[/yellow] Execute a bash command.")
+    console.print("[yellow]5. [command]:[/yellow] Execute a Gemini command with optional arguments.")
+
+def main():
+    while True:
+        try:
+            user_input = input("> ")
+            if user_input.lower() in ['exit', 'quit']:
+                save_history()
+                console.print("[exit]Goodbye![/exit]")
+                break
+            if user_input.lower() == 'clear':
+                memory_list.clear()
+                console.print("[info]Memory has been cleared.[/info]")
+                continue
+            if user_input.lower() == 'history':
+                show_history()
+                continue
+            if user_input.lower() in ['help']:
+                show_help()
+                continue
+            if user_input.lower().startswith('bash '):
+                command = user_input[5:]
+                output = execute_bash_command(command)
+                console.print(output)
+                continue
+            history.append({"command": user_input, "response": ""})
+            result = gemini_request(user_input)
+            if result:
+                render_response(result)
+                history[-1]['response'] = result
+            else:
+                console.print("[error]No valid response received. Try again.[/error]")
+        except KeyboardInterrupt:
+            save_history()
+            console.print("\n[exit]Exiting...[/exit]")
+            break
+        except Exception as e:
+            console.print(f"[error]An error occurred: {e}[/error]")
+
+if __name__ == "__main__":
+    main()

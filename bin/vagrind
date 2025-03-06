@@ -1,0 +1,59 @@
+#!/bin/bash
+# Valgrind Helper
+need valgrind
+need massif-visualizer
+TOOL_DESC=(
+  "leakcheck:Memory leak detector        - finds memory leaks and shows details about allocation points"
+  "massif:Heap profiler                  - tracks memory usage over time and identifies allocation hotspots"
+  "callgrind:Call-graph profiler         - analyzes function calls, their costs, and execution paths"
+  "cachegrind:Cache simulator            - detects cache misses, branch prediction failures, and memory access patterns" 
+  "helgrind:Thread error detector        - finds race conditions and lock ordering problems in threaded code"
+  "memcheck:Memory error detector        - catches invalid memory accesses, use of uninitialized values, and more"
+  "lackey:Simple instrumentation example - demonstrates Valgrind's instrumentation capabilities"
+  "dhat:Dynamic heap analysis            - shows allocation/deallocation patterns and lifetime information"
+  "drd:Data race detector                - alternative to Helgrind focused on detecting race conditions"
+  "exp-bbv:Basic block vector generator  - creates SimPoint data for program phase analysis"
+)
+show_usage() {
+  echo "Usage: $0 <tool> <exe>"
+  echo "Available tools and descriptions:"
+  for desc in "${TOOL_DESC[@]}"; do
+    echo "  ${desc%%:*} - ${desc#*:}"
+  done
+  exit 1
+}
+get_latest() {
+  ls -t "$1" 2>/dev/null | head -n 1
+}
+[ $# -lt 2 ] && show_usage
+TOOL=$1
+EXE=$2
+shift 2
+[ ! -x "$EXE" ] && { echo "Error: '$EXE' not found or not executable"; exit 1; }
+valid_tool=0
+for desc in "${TOOL_DESC[@]}"; do
+  [ "${desc%%:*}" = "$TOOL" ] && valid_tool=1 && break
+done
+[ $valid_tool -eq 0 ] && { echo "Error: Unknown tool '$TOOL'"; show_usage; }
+echo "Running Valgrind tool: $TOOL"
+case "$TOOL" in
+  leakcheck)
+    valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes "$EXE" "$@"
+    ;;
+  massif)
+    valgrind --tool=massif "$EXE" "$@"
+    massif-visualizer "massif.out.*"
+    ;;
+  callgrind)
+    valgrind --tool=callgrind "$EXE" "$@"
+    kcachegrind callgrind.out.*
+    ;;
+  cachegrind)
+    valgrind --tool=cachegrind "$EXE" "$@"
+    kcachegrind cachegrind.out.*
+    ;;
+  helgrind|memcheck|lackey|dhat|drd|exp-bbv)
+    valgrind --tool="$TOOL" "$EXE" "$@"
+    ;;
+esac
+echo "Valgrind analysis complete"

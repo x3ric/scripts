@@ -1,6 +1,5 @@
 #!/bin/env python3
-# Memory Dumper
-
+# Memory Core Dumper
 import sys
 import os
 import psutil
