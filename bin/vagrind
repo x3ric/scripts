@@ -47,6 +47,7 @@ case "$TOOL" in
   callgrind)
     valgrind --tool=callgrind "$EXE" "$@"
     kcachegrind callgrind.out.*
+    #cg_annotate --auto=yes cachegrind.out.*
     ;;
   cachegrind)
     valgrind --tool=cachegrind "$EXE" "$@"

@@ -12,7 +12,6 @@ packages=(
     gimp
     evtest
     glfw
-    github-desktop-bin
     nasm
     newsboat
     prusa-slicer
