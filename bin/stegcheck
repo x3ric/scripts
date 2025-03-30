@@ -1,0 +1,176 @@
+#!/bin/bash -i
+# StegCheck - Steganography Analyzer Wrapper
+[ $# -lt 1 ] && { echo "Usage: $0 <image_file> [wordlist]"; exit 1; }
+IMG=$1
+WL=${2:-"/usr/share/dict/rockyou.txt"}
+OUT="steg_$(basename "$IMG")"
+[ ! -f "$IMG" ] && { echo "Error: Image not found"; exit 1; }
+mkdir -p "$OUT"
+FOUND_DATA=0
+log_success() { FOUND_DATA=1; }
+if [ -t 1 ]; then
+  BLUE=$(tput setaf 4)
+  GREEN=$(tput setaf 2)
+  RED=$(tput setaf 1)
+  YELLOW=$(tput setaf 3)
+  RESET=$(tput sgr0)
+else
+  BLUE=""
+  GREEN=""
+  RED=""
+  YELLOW=""
+  RESET=""
+fi
+header() { echo "${BLUE}[+] $1${RESET}"; }
+success() { echo "${GREEN}[+] $1${RESET}"; }
+warning() { echo "${YELLOW}[!] $1${RESET}"; }
+error() { echo "${RED}[-] $1${RESET}"; }
+header "File info:"
+file "$IMG"
+header "Searching for hidden text:"
+FLAG_TEXT=$(strings -n 5 "$IMG" | grep -i -E "(flag|ctf|key|pass|secret|cred|admin|login|user|hash|pico)" 2>/dev/null)
+if [ -n "$FLAG_TEXT" ]; then 
+    success "Found potentially interesting text:"
+    echo "$FLAG_TEXT" | grep --color=always -i -E "(flag|ctf|key|pass|secret|cred|admin|login|user|hash|pico|\{.*\})"
+    log_success
+fi
+BRACES=$(strings "$IMG" | grep -E "\{[a-zA-Z0-9_]{5,}\}" 2>/dev/null)
+if [ -n "$BRACES" ]; then
+    success "Found data in curly braces:"
+    echo "$BRACES"
+    log_success
+fi
+BASE64_DATA=$(strings "$IMG" | grep -E "^[A-Za-z0-9+/]{20,}={0,2}$" | head -3 2>/dev/null)
+if [ -n "$BASE64_DATA" ]; then
+    BASE64_DECODED=$(echo "$BASE64_DATA" | base64 -d 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$BASE64_DECODED" ]; then
+        success "Decoded base64:"
+        echo "$BASE64_DECODED"
+        log_success
+    fi
+fi
+if [ $FOUND_DATA -eq 0 ]; then
+    echo "    No obvious hidden text found, showing some filtered strings:"
+    strings -n 6 "$IMG" | grep -v -E "^(.)\1{5,}$" | grep -v -E "^(.{1,2})\1{3,}$" | 
+    grep -E "[a-zA-Z]{3,}[a-zA-Z0-9]{3,}" | grep -v -E "(IDAT|IHDR|IEND|sRGB|gAMA|pHYs|cHRM|bKGD|tRNS|tEXt|zTXt|time|date|chunk|XML|Adobe)" | head -15
+fi
+header "First 256 bytes:"
+hexdump -C "$IMG" | head -4
+if command -v exiftool &>/dev/null; then
+    EXIF_DATA=$(exiftool "$IMG" | grep -v "File Name\|Directory\|File Size\|File Permissions")
+    if [ -n "$EXIF_DATA" ]; then 
+        header "EXIF metadata:"
+        echo "$EXIF_DATA"
+    fi
+fi
+if command -v binwalk &>/dev/null; then
+    header "Binwalk scan:"
+    BINWALK_OUT=$(binwalk "$IMG")
+    echo "$BINWALK_OUT" | head -n 3
+    EMBEDDED=$(echo "$BINWALK_OUT" | grep -v "Analyzed" | grep -v "DECIMAL" | grep -v "-" | wc -l)
+    if [ $EMBEDDED -gt 1 ]; then
+        echo "    Found $EMBEDDED embedded files/signatures"
+        echo "$BINWALK_OUT" | grep -v "Analyzed" | grep -v "DECIMAL" | grep -v "-"
+        binwalk -e -C "$OUT/binwalk" "$IMG" &>/dev/null
+        log_success
+    fi
+fi
+header "Extraction results:"
+if command -v stepic &>/dev/null; then
+    STEPIC_OUT=$(stepic -d -i "$IMG" 2>/dev/null)
+    if [ -n "$STEPIC_OUT" ]; then
+        success "Stepic found data:"
+        echo "$STEPIC_OUT"
+        echo "$STEPIC_OUT" > "$OUT/stepic.txt"
+        log_success
+    fi
+fi
+if command -v outguess &>/dev/null; then
+    outguess -r "$IMG" "$OUT/outguess.txt" 2>/dev/null
+    if [ -s "$OUT/outguess.txt" ]; then
+        success "Outguess found data:"
+        cat "$OUT/outguess.txt"
+        log_success
+    fi
+fi
+if command -v steghide &>/dev/null; then
+    STEGHIDE_INFO=$(steghide info "$IMG" 2>&1)
+    if ! echo "$STEGHIDE_INFO" | grep -q "is not supported"; then
+        header "Steghide info:"
+        echo "$STEGHIDE_INFO" | grep -v "trying to get info"
+        if [ $FOUND_DATA -eq 0 ]; then
+            for p in "" "password" "123456" "admin" "steghide" "hidden" "secret"; do
+                if steghide extract -sf "$IMG" -p "$p" -xf "$OUT/steghide.txt" &>/dev/null; then
+                    success "Steghide: password found: '$p'"
+                    cat "$OUT/steghide.txt"
+                    log_success
+                    break
+                fi
+            done
+        fi
+    fi
+fi
+if [[ "$IMG" == *".png" || "$IMG" == *".bmp" ]] && command -v zsteg &>/dev/null; then
+    ZSTEG_OUT=$(timeout 20s zsteg "$IMG" 2>/dev/null || true)
+    if [ $? -eq 0 ] && [ -n "$ZSTEG_OUT" ] && ! echo "$ZSTEG_OUT" | grep -q "nothing"; then
+        success "Zsteg found data:"
+        echo "$ZSTEG_OUT"
+        log_success
+    else
+        timeout 10s zsteg -E "$IMG" -o "$OUT/zsteg_extract.bin" 2>/dev/null || true
+        if [ -s "$OUT/zsteg_extract.bin" ]; then
+            success "Zsteg extracted data to file"
+            file "$OUT/zsteg_extract.bin"
+            log_success
+        fi
+    fi
+fi
+if command -v foremost &>/dev/null; then
+    foremost -i "$IMG" -o "$OUT/foremost" &>/dev/null
+    CARVED_FILES=$(find "$OUT/foremost" -type f -not -name "audit.txt" 2>/dev/null | wc -l)
+    if [ -d "$OUT/foremost" ] && [ "$CARVED_FILES" -gt 0 ]; then
+        success "Foremost carved files:"
+        grep -i "FILE" "$OUT/foremost/audit.txt" 2>/dev/null
+        find "$OUT/foremost" -type f -not -name "audit.txt" 2>/dev/null | while read file; do
+            echo "    $(basename "$file") ($(file --brief "$file" 2>/dev/null))"
+        done
+        log_success
+    fi
+fi
+if [ $FOUND_DATA -eq 0 ] && command -v steghide &>/dev/null && [ -f "$WL" ]; then
+    if steghide info "$IMG" 2>&1 | grep -q "capacity" && ! steghide info "$IMG" 2>&1 | grep -q "is not supported"; then
+        if command -v stegseek &>/dev/null; then
+            header "Running stegseek..."
+            STEGSEEK_OUT=$(stegseek --seed "$IMG" "$WL" "$OUT/stegseek.txt" 2>&1 || true)
+            if echo "$STEGSEEK_OUT" | grep -q "Found"; then
+                success "Stegseek found data:"
+                echo "$STEGSEEK_OUT" | grep -E "Found|Extracting" 
+                if [ -f "$OUT/stegseek.txt" ]; then
+                    cat "$OUT/stegseek.txt"
+                    log_success
+                fi
+            fi
+        elif [ "$(command -v stegseek)" == "" ]; then
+            header "Running limited steghide bruteforce (checking first 1000 passwords)..."
+            for p in $(head -1000 "$WL"); do
+                if steghide extract -sf "$IMG" -p "$p" -xf "$OUT/steghide_brute.txt" &>/dev/null; then
+                    success "Password found: '$p'"
+                    cat "$OUT/steghide_brute.txt"
+                    log_success
+                    break
+                fi
+            done
+        fi
+    fi
+fi
+if ! command -v aperisolve &>/dev/null; then
+    header "Installing aperisolve"
+    sudo sh -c "$(curl -fs https://www.aperisolve.com/install.sh)" &>/dev/null
+fi
+header "Running aperisolve"
+aperisolve "$IMG" -o "$OUT/aperisolve" &>/dev/null
+success "Aperisolve complete - check $OUT/aperisolve"
+header "Analysis complete. Extracted files in $OUT/"
+if [ $FOUND_DATA -eq 1 ]; then 
+    success "Data was successfully extracted!"
+fi
