@@ -207,7 +207,7 @@ def main():
     parser.add_argument('-arch', dest="arch", default="64", help="Architecture (32 or 64, default: 64)")
     parser.add_argument('--s', action="store_true", dest="format_s", help="Use %%s format (default: %%p)")
     parser.add_argument('-min', dest="min", type=int, default=1, help="Start position (default: 1)")
-    parser.add_argument('-max', dest="max", type=int, default=40, help="End position (default: 40)")
+    parser.add_argument('-max', dest="max", type=int, default=500, help="End position (default: 500)")
     parser.add_argument('--pattern', dest="pattern", help="Custom regex pattern to find flag")
     parser.add_argument('--canary', action="store_true", help="Look for canary leak patterns")
     parser.add_argument('--leaks', action="store_true", help="Print all leaks found")
