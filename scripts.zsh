@@ -6,7 +6,8 @@ alias hexedit="hexedit --color"
 alias dsym="sudo python ~/.local/zsh/Internal/scripts/bin/dsym"
 alias linpeas="curl -L https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh -s --output $HOME/.local/www/unix/enum/linpeas.sh"
 alias upload='curl bashupload.com -T "${@}"'
-alias burl='curl -x http://127.0.0.1:8080/ -k'
+alias burp-curl='curl -x http://127.0.0.1:8080/ -k'
+alias burp-chromium="chromium --proxy-server=127.0.0.1:8080"
 alias adb-proxy-set="adb shell settings put global http_proxy $(ip a | grep -A 2 "enp4s0:" | grep -oP '(?<=inet\s)\d+(\.\d+){3}'):8080"
 alias adb-proxy-unset="adb shell settings put global http_proxy :0"
 
