@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+# XOR Utility
+import sys
+import binascii
+import itertools
+import argparse
+import os
+
+def xor_bytes(data, key):
+    return bytes(a ^ b for a, b in zip(data, itertools.cycle(key)))
+
+def hex_to_bytes(hex_str):
+    return binascii.unhexlify(hex_str.replace(" ", ""))
+
+def read_file(file_path):
+    with open(file_path, "rb") as f:
+        return f.read()
+
+def xor_decrypt(data, key):
+    return xor_bytes(data, key)
+
+def main():
+    parser = argparse.ArgumentParser(description="XOR Utility")
+    parser.add_argument("data", help="Hex string or file containing data to XOR with the key")
+    parser.add_argument("key", help="Hex key for XOR")
+    parser.add_argument("-o", "--output", help="Save result to file")
+    args = parser.parse_args()
+    if os.path.isfile(args.data):
+        try:
+            data = read_file(args.data)
+        except Exception as e:
+            print(f"Error reading file: {e}")
+            sys.exit(1)
+    else:
+        try:
+            data = hex_to_bytes(args.data)
+        except Exception as e:
+            print(f"Error converting input data: {e}")
+            sys.exit(1)
+    try:
+        key = hex_to_bytes(args.key)
+    except Exception as e:
+        print(f"Error converting key: {e}")
+        sys.exit(1)
+    try:
+        result = xor_decrypt(data, key)
+        if args.output:
+            with open(args.output, "wb") as f:
+                f.write(result)
+            print(f"Decryption complete! Saved to {args.output}")
+        else:
+            print(result.hex())
+    except Exception as e:
+        print(f"Error during XOR operation: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

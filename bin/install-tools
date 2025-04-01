@@ -10,6 +10,8 @@ packages=(
     aarch64-linux-gnu-glibc
     aarch64-linux-gnu-binutils
     # Specific
+    bless
+    visualvm
     nocashgba-debugger
     pulseview
     kicad
