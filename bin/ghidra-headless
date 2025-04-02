@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+# Ghidra Lazy Dec/Dis
+import os
+import sys
+import subprocess
+import tempfile
+import shutil
+
+def find_ghidra_headless():
+    direct_headless = shutil.which("ghidra-analyzeHeadless")
+    if direct_headless:
+        return direct_headless
+    ghidra_bin = shutil.which("ghidra")
+    if ghidra_bin:
+        headless_candidates = [
+            os.path.join(os.path.dirname(ghidra_bin), "support/analyzeHeadless"),
+            os.path.join(os.path.dirname(ghidra_bin), "../support/analyzeHeadless"),
+            "/usr/share/ghidra/support/analyzeHeadless",
+            "/opt/ghidra/support/analyzeHeadless"
+        ]
+        for candidate in headless_candidates:
+            if os.path.exists(candidate):
+                return candidate
+    ghidra_path = os.environ.get("GHIDRA_PATH")
+    if ghidra_path:
+        headless = os.path.join(ghidra_path, "support/analyzeHeadless")
+        if os.path.exists(headless):
+            return headless
+    return None
+
+def process_binary(binary_path, mode="decompile"):
+    if not os.path.exists(binary_path):
+        print(f"Error: File {binary_path} not found")
+        return False
+    headless_path = find_ghidra_headless()
+    if not headless_path:
+        print("Error: Ghidra headless analyzer not found. Make sure Ghidra is installed correctly.")
+        return False
+    binary_name = os.path.basename(binary_path)
+    base_name = os.path.splitext(binary_name)[0]
+    output_ext = ".c" if mode == "decompile" else ".asm"
+    output_file = f"{base_name}{output_ext}"
+    with tempfile.TemporaryDirectory() as temp_project_dir:
+        with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as temp_script:
+            temp_script_path = temp_script.name
+            script_content = '''
+import __main__ as ghidra_app
+{0}
+import os
+
+def run():
+    program = ghidra_app.currentProgram
+    output_file = "{1}"
+    
+    {2}
+    
+    result = ""
+    funcs = program.getListing().getFunctions(True)
+    for func in funcs:
+        result += "\\n// " + func.getName() + "\\n"
+        
+        {3}
+        
+        {4}
+    
+    with open(output_file, "w") as fw:
+        fw.write(result)
+        print("[*] Saved to " + output_file)
+
+if __name__ == "__main__":
+    run()
+'''.format(
+    '' if mode == "disassemble" else 'from ghidra.app.decompiler import DecompInterface',
+    os.path.join(os.getcwd(), output_file),
+    'decompiler = DecompInterface()\n    decompiler.openProgram(program)' if mode == "decompile" else '',
+    # Disassembly code
+    '''# Disassembly
+        addr = func.getEntryPoint()
+        insts = program.getListing().getInstructions(addr, True)
+        for inst in insts:
+            if ghidra_app.getFunctionContaining(inst.getAddress()) != func:
+                break
+            result += str(inst.getAddressString(True, True)) + " " + str(inst) + "\\n"''' if mode == "disassemble" else '',
+    # Decompilation code
+    '''# Decompilation
+        dec = decompiler.decompileFunction(func, 0, None)
+        if dec and dec.decompileCompleted():
+            ret = dec.getDecompiledFunction()
+            if ret:
+                result += ret.getC()''' if mode == "decompile" else ''
+)
+            temp_script.write(script_content.encode())
+
+        headless_cmd = [
+            headless_path,
+            temp_project_dir,
+            "TempProject",
+            "-import", os.path.abspath(binary_path),
+            "-scriptPath", os.path.dirname(temp_script_path),
+            "-postScript", os.path.basename(temp_script_path),
+            "-overwrite"
+        ]
+        print(f"Running Ghidra {mode} on {binary_path}...")
+        try:
+            subprocess.run(headless_cmd, check=True)
+            print(f"{mode.capitalize()} complete. Output saved to {os.path.join(os.getcwd(), output_file)}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error running Ghidra: {e}")
+            os.unlink(temp_script_path)
+            return False
+        os.unlink(temp_script_path)
+        return True
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <binary_file> [decompile|disassemble]")
+        sys.exit(1)
+    binary_path = sys.argv[1]
+    mode = sys.argv[2].lower() if len(sys.argv) > 2 else "decompile"
+    if mode not in ["decompile", "disassemble"]:
+        print("Error: Mode must be either 'decompile' or 'disassemble'")
+        sys.exit(1)
+    if not process_binary(binary_path, mode):
+        sys.exit(1)
