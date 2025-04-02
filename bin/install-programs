@@ -1,6 +1,7 @@
 #!/bin/bash
 # Install Used Programs
 packages=(
+    electron25-bin
     code
     scrcpy
     gnome-disk-utility
