@@ -1,7 +1,6 @@
 #!/bin/bash
 # Install Pentest Tools
 packages=(
-    claude-code
     man-pages
     visual-studio-code-bin
     # Arm
