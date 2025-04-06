@@ -42,6 +42,7 @@ packages=(
     tcpflow
     macchanger
     nmap
+    vulscans
     openvpn
     croc
     onionshare
