@@ -8,15 +8,12 @@ This repo contains scripts I gathered online and some I've written myself.
 #### `need` Function
 
 - Installs missing packages non-intrusively when used in bash scripts.
-- Source: `https://github.com/x3ric/usr/blob/main/.local/share/bin/need`
-- Add to your `$PATH`.
+- Add to your `$PATH` [need](https://github.com/x3ric/usr/blob/main/.local/share/bin/need).
 - Works out of the box on Arch Linux. For other distros, adapt the script to use your package manager and update package names.
 
 #### Pentesting Recommendation
 
-For pentesting, I recommend adding the `blackarch` script to enable the BlackArch repository on Arch Linux since some of my scripts use Arch Linux packages:
-
-- Source: `https://github.com/x3ric/usr/blob/main/.local/share/bin/blackarch`
+For pentesting, I recommend adding the [blackarch](https://github.com/x3ric/usr/blob/main/.local/share/bin/blackarch) script to enable the BlackArch repository on Arch Linux since some of my scripts use Arch Linux packages:
 
 ### Notes
 
