@@ -1,0 +1,67 @@
+#!/usr/bin/bash
+# Lazy Unzip: A wrapper for auto-unzipping password-protected CTF challenge ZIPs.
+# - Falls back to no password if needed
+# - Optionally watches current dir and auto-extracts new ZIPs on download (use --watch)
+# - Extracts files into a folder named after the ZIP file (if not already created)
+# - Deletes the ZIP file after extraction
+
+need expect
+need inotify-tools
+PASSWORDS=("hackthebox" "ctflearn" "tryhackme")
+
+extract_zip() {
+    local file="$1"
+    local folder="${file%.zip}"
+    if [[ ! -d "$folder" ]]; then
+        mkdir "$folder"
+    fi
+    echo "[*] Extracting: $file into folder '$folder'"
+    for pass in "${PASSWORDS[@]}"; do
+        expect <<EOF
+spawn unzip -o "$file" -d "$folder"
+expect {
+    "password:" {
+        send "$pass\r"
+        exp_continue
+    }
+    eof
+}
+EOF
+        if [ $? -eq 0 ]; then
+            echo "[+] Extracted $file with password '$pass'"
+            rm -f "$file"
+            return
+        fi
+    done
+    echo "[!] All passwords failed. Trying without password..."
+    unzip -o "$file" -d "$folder" && echo "[+] Extracted $file without password."
+    rm -f "$file"
+}
+
+watch_mode() {
+    echo "[*] Watch mode enabled. Monitoring for new ZIP files in $(pwd)..."
+    inotifywait -m -e close_write --format "%f" . | while read -r fname; do
+        if [[ "$fname" == *.zip ]]; then
+            sleep 1
+            extract_zip "$fname"
+        fi
+    done
+}
+
+if [ "$1" == "--watch" ]; then
+    watch_mode
+    exit 0
+fi
+
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <zip_file1> [zip_file2] ... OR $0 --watch"
+    exit 1
+fi
+
+for zipfile in "$@"; do
+    if [[ -f "$zipfile" ]]; then
+        extract_zip "$zipfile"
+    else
+        echo "[!] File not found: $zipfile"
+    fi
+done
