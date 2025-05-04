@@ -12,8 +12,8 @@ packages=(
     aarch64-linux-gnu-glibc
     aarch64-linux-gnu-binutils
     # Specific
-    bless
-    visualvm
+    imhex
+    visualvm # java vm class/stack files analyzer
     nocashgba-debugger
     pulseview
     kicad
