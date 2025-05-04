@@ -12,7 +12,7 @@ packages=(
     aarch64-linux-gnu-glibc
     aarch64-linux-gnu-binutils
     # Specific
-    imhex
+    imhex-bin
     visualvm # java vm class/stack files analyzer
     nocashgba-debugger
     pulseview
@@ -91,7 +91,6 @@ packages=(
     quark-engine # blackarch
     python-plotly
     typescript
-    pinta
     jython # for burp extension /opt/jython
     snyk
 )
